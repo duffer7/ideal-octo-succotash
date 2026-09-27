@@ -9,4 +9,15 @@ export const COLORS = {
 
 export const FONTS = {
   main: '"Comic Sans MS", "Arial Rounded MT Bold", system-ui, sans-serif',
+  /** Декоративный шрифт для английского языка (DynaPuff из index.html). */
+  dynaPuff: '"DynaPuff", "Comic Sans MS", "Arial Rounded MT Bold", system-ui, sans-serif',
 } as const;
+
+/**
+ * Возвращает основной шрифт для текущего языка.
+ * Английский — «DynaPuff» (детский декоративный), русский — системный фолбэк,
+ * т.к. DynaPuff не содержит кириллицы.
+ */
+export function getMainFont(lang: string): string {
+  return lang === 'en' ? FONTS.dynaPuff : FONTS.main;
+}

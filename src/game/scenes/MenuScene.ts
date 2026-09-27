@@ -1,8 +1,8 @@
 import Phaser from 'phaser';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, getMainFont } from '../theme';
 import { createButton } from '../ui/Button';
 import { getSafeBounds } from '../safeArea';
-import { t, onLanguageChange } from '../i18n';
+import { t, onLanguageChange, getLanguage } from '../i18n';
 
 /**
  * MenuScene — главное меню с крупными кнопками для детей.
@@ -23,7 +23,7 @@ export class MenuScene extends Phaser.Scene {
 
     this.titleText = this.add
       .text(bounds.centerX, bounds.y + 40, t('menu.title'), {
-        fontFamily: FONTS.main,
+        fontFamily: getMainFont(getLanguage()),
         fontSize: '84px',
         color: '#ffffff',
         fontStyle: 'bold',
@@ -35,6 +35,7 @@ export class MenuScene extends Phaser.Scene {
     // Пересобираем кнопки при смене языка (чтобы обновились подписи).
     this.unsubscribe = onLanguageChange(() => {
       this.titleText.setText(t('menu.title'));
+      this.titleText.setFontFamily(getMainFont(getLanguage()));
       this.playButton?.destroy();
       this.settingsButton?.destroy();
       this.buildButtons(bounds);

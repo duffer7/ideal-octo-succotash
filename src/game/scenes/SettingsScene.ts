@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, getMainFont } from '../theme';
 import { getSafeBounds } from '../safeArea';
 import { createButton } from '../ui/Button';
 import {
@@ -44,7 +44,7 @@ export class SettingsScene extends Phaser.Scene {
     // Заголовок.
     this.titleText = this.add
       .text(bounds.centerX, bounds.y + 20, t('settings.title'), {
-        fontFamily: FONTS.main,
+        fontFamily: getMainFont(getLanguage()),
         fontSize: '64px',
         color: '#ffffff',
         fontStyle: 'bold',
@@ -54,7 +54,7 @@ export class SettingsScene extends Phaser.Scene {
     // Подпись «Язык».
     this.languageLabel = this.add
       .text(bounds.centerX, bounds.centerY - 120, t('settings.language'), {
-        fontFamily: FONTS.main,
+        fontFamily: getMainFont(getLanguage()),
         fontSize: '40px',
         color: '#ffffff',
         fontStyle: 'bold',
@@ -106,14 +106,14 @@ export class SettingsScene extends Phaser.Scene {
 
     const flag = this.add
       .text(0, -h * 0.12, LANGUAGE_FLAGS[lang], {
-        fontFamily: FONTS.main,
+        fontFamily: getMainFont(getLanguage()),
         fontSize: `${h * 0.34}px`,
       })
       .setOrigin(0.5);
 
     const label = this.add
       .text(0, h * 0.24, LANGUAGE_LABELS[lang], {
-        fontFamily: FONTS.main,
+        fontFamily: getMainFont(lang),
         fontSize: `${h * 0.2}px`,
         color: '#ffffff',
         fontStyle: 'bold',
@@ -123,6 +123,8 @@ export class SettingsScene extends Phaser.Scene {
     const container = this.add.container(x, y, [bg, flag, label]);
     container.setSize(w, h);
     container.setData('bg', bg);
+    container.setData('flag', flag);
+    container.setData('label', label);
     container.setData('w', w);
     container.setData('h', h);
     container.setInteractive(
@@ -177,7 +179,16 @@ export class SettingsScene extends Phaser.Scene {
 
   /** Обновляет текстовые надписи на текущий язык. */
   private refreshTexts(): void {
+    const font = getMainFont(getLanguage());
     this.titleText.setText(t('settings.title'));
+    this.titleText.setFontFamily(font);
     this.languageLabel.setText(t('settings.language'));
+    this.languageLabel.setFontFamily(font);
+
+    // Метки на кнопках языков используют шрифт своего языка.
+    for (const { lang, container } of this.languageButtons) {
+      const label = container.getData('label') as Phaser.GameObjects.Text;
+      label.setFontFamily(getMainFont(lang));
+    }
   }
 }

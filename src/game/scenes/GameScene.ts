@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, getMainFont } from '../theme';
 import { getSafeBounds } from '../safeArea';
 import { createButton } from '../ui/Button';
 import { Progress } from '../progress';
-import { t } from '../i18n';
+import { t, getLanguage } from '../i18n';
 import {
   ACTIVE_SEASON,
   getLevel,
@@ -159,7 +159,7 @@ export class GameScene extends Phaser.Scene {
 
     this.add
       .text(centerX, this.bounds.y, t('game.level', { n: this.level }), {
-        fontFamily: FONTS.main,
+        fontFamily: getMainFont(getLanguage()),
         fontSize: '44px',
         color: '#ffffff',
         fontStyle: 'bold',
@@ -169,7 +169,7 @@ export class GameScene extends Phaser.Scene {
 
     this.add
       .text(centerX, this.bounds.y + 50, t(season.nameKey), {
-        fontFamily: FONTS.main,
+        fontFamily: getMainFont(getLanguage()),
         fontSize: '28px',
         color: '#eaf6ff',
       })
@@ -182,7 +182,7 @@ export class GameScene extends Phaser.Scene {
         this.bounds.y,
         `${this.sorted} / ${this.config.targetCount}`,
         {
-          fontFamily: FONTS.main,
+          fontFamily: getMainFont(getLanguage()),
           fontSize: '44px',
           color: '#ffffff',
           fontStyle: 'bold',
@@ -232,7 +232,7 @@ export class GameScene extends Phaser.Scene {
     // Подпись корзины (Песок / Вода).
     const label = this.add
       .text(0, size * 0.34, t(basket.labelKey), {
-        fontFamily: FONTS.main,
+        fontFamily: getMainFont(getLanguage()),
         fontSize: `${size * 0.16}px`,
         color: '#ffffff',
         fontStyle: 'bold',
@@ -500,7 +500,7 @@ export class GameScene extends Phaser.Scene {
 
     this.add
       .text(centerX, centerY - 60, t('game.wellDone'), {
-        fontFamily: FONTS.main,
+        fontFamily: getMainFont(getLanguage()),
         fontSize: '56px',
         color: '#ffe066',
         fontStyle: 'bold',
@@ -511,7 +511,7 @@ export class GameScene extends Phaser.Scene {
     const starStr = '★'.repeat(stars) + '☆'.repeat(3 - stars);
     this.add
       .text(centerX, centerY + 10, starStr, {
-        fontFamily: FONTS.main,
+        fontFamily: getMainFont(getLanguage()),
         fontSize: '56px',
         color: '#ffe066',
       })

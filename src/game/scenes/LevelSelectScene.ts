@@ -1,9 +1,9 @@
 import Phaser from 'phaser';
-import { COLORS, FONTS } from '../theme';
+import { COLORS, getMainFont } from '../theme';
 import { buildGrid, fontForCell, type GridCell } from '../layout';
 import { createButton } from '../ui/Button';
 import { Progress } from '../progress';
-import { t } from '../i18n';
+import { t, getLanguage } from '../i18n';
 import { ACTIVE_SEASON, getSeason } from '../seasons';
 
 /**
@@ -24,7 +24,7 @@ export class LevelSelectScene extends Phaser.Scene {
     // Заголовок сезона.
     this.add
       .text(width / 2, 36, t(season.nameKey), {
-        fontFamily: FONTS.main,
+        fontFamily: getMainFont(getLanguage()),
         fontSize: '60px',
         color: '#ffffff',
         fontStyle: 'bold',
@@ -34,7 +34,7 @@ export class LevelSelectScene extends Phaser.Scene {
     // Подзаголовок.
     this.add
       .text(width / 2, 104, t('levelSelect.title'), {
-        fontFamily: FONTS.main,
+        fontFamily: getMainFont(getLanguage()),
         fontSize: '30px',
         color: '#eaf6ff',
       })
@@ -87,7 +87,7 @@ export class LevelSelectScene extends Phaser.Scene {
     // Номер уровня.
     const num = this.add
       .text(0, unlocked ? -size * 0.08 : 0, unlocked ? String(level) : '🔒', {
-        fontFamily: FONTS.main,
+        fontFamily: getMainFont(getLanguage()),
         fontSize: `${fontForCell({ ...cell, width: size, height: size }, 0.45)}px`,
         color: '#ffffff',
         fontStyle: 'bold',
@@ -100,7 +100,7 @@ export class LevelSelectScene extends Phaser.Scene {
     if (unlocked && stars > 0) {
       const starText = this.add
         .text(0, size * 0.25, '★'.repeat(stars) + '☆'.repeat(3 - stars), {
-          fontFamily: FONTS.main,
+          fontFamily: getMainFont(getLanguage()),
           fontSize: `${size * 0.16}px`,
           color: '#ffe066',
         })

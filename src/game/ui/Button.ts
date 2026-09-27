@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { FONTS } from '../theme';
+import { getMainFont } from '../theme';
+import { getLanguage } from '../i18n';
 
 export interface ButtonOptions {
   /** Ширина контейнера. */
@@ -43,7 +44,7 @@ export function createButton(
 
   const text = scene.add
     .text(0, 0, label, {
-      fontFamily: FONTS.main,
+      fontFamily: getMainFont(getLanguage()),
       fontSize: `${fontSize}px`,
       color: '#ffffff',
       fontStyle: 'bold',

@@ -8,6 +8,8 @@
  *   onLanguageChange(cb)       // подписка на смену языка
  */
 
+import { ensureFontsLoaded } from './fonts';
+
 /** Доступные языки. */
 export type Language = 'en' | 'ru';
 
@@ -169,7 +171,11 @@ export function setLanguage(lang: Language): void {
   // Обновляем lang у <html> для доступности.
   document.documentElement.lang = lang;
 
-  listeners.forEach((cb) => cb(lang));
+  // Не дожидаясь загрузки веб-шрифта, чтобы при смене языка на английский
+  // текст сразу отрисовался нужным шрифтом, а не фолбэком.
+  void ensureFontsLoaded().finally(() => {
+    listeners.forEach((cb) => cb(lang));
+  });
 }
 
 /** Подписка на смену языка. Возвращает функцию отписки. */
