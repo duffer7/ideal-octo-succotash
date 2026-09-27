@@ -14,3 +14,4 @@ ios/
 .vscode/*
 !.vscode/extensions.json
 
+.codegraph/

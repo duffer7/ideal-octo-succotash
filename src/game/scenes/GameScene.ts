@@ -3,6 +3,7 @@ import { COLORS, FONTS } from '../theme';
 import { getSafeBounds } from '../safeArea';
 import { createButton } from '../ui/Button';
 import { Progress } from '../progress';
+import { t } from '../i18n';
 
 const TOTAL_TARGETS = 3;
 
@@ -36,13 +37,14 @@ export class GameScene extends Phaser.Scene {
       width: 90,
       height: 72,
       color: COLORS.danger,
-      label: '←',
+
+      label: t('common.back'),
       onClick: () => this.scene.start('LevelSelectScene'),
     });
 
     // Заголовок уровня и счёт.
     this.add
-      .text(bounds.centerX, bounds.y, `Уровень ${this.level}`, {
+      .text(bounds.centerX, bounds.y, t('game.level', { n: this.level }), {
         fontFamily: FONTS.main,
         fontSize: '44px',
         color: '#ffffff',
@@ -170,7 +172,8 @@ export class GameScene extends Phaser.Scene {
       .setStrokeStyle(4, 0xffffff, 0.8);
 
     const text = this.add
-      .text(bounds.centerX, bounds.centerY - 40, 'Молодец! ★★★', {
+
+      .text(bounds.centerX, bounds.centerY - 40, t('game.wellDone'), {
         fontFamily: FONTS.main,
         fontSize: '56px',
         color: '#ffe066',
@@ -182,7 +185,7 @@ export class GameScene extends Phaser.Scene {
       width: 280,
       height: 80,
       color: COLORS.secondary,
-      label: 'Дальше',
+      label: t('game.next'),
       onClick: () => this.scene.start('LevelSelectScene'),
     });
 

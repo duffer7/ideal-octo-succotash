@@ -3,10 +3,12 @@
  * Показывается только в web-режиме, когда экран в портретной ориентации.
  * В нативном приложении ориентация заблокирована в ландшафт, поэтому оверлей не нужен.
  */
+import { t, onLanguageChange } from '../game/i18n';
+
 export function registerOrientationOverlay(): void {
   const overlay = document.createElement('div');
   overlay.id = 'orientation-overlay';
-  overlay.innerHTML = '<div class="rotate-icon">📱</div><p>Поверните устройство горизонтально</p>';
+  overlay.innerHTML = `<div class="rotate-icon">📱</div><p>${t('orientation.rotate')}</p>`;
   overlay.style.cssText = [
     'position:fixed',
     'inset:0',
@@ -31,6 +33,12 @@ export function registerOrientationOverlay(): void {
     icon.style.transition = 'transform 0.3s';
   }
 
+  // Обновляем текст при смене языка.
+  onLanguageChange(() => {
+    const p = overlay.querySelector('p');
+    if (p) p.textContent = t('orientation.rotate');
+  });
+
   const update = (): void => {
     const isPortrait = window.innerHeight > window.innerWidth;
     overlay.style.display = isPortrait ? 'flex' : 'none';
@@ -43,3 +51,5 @@ export function registerOrientationOverlay(): void {
   window.addEventListener('resize', update);
   window.addEventListener('orientationchange', update);
 }
+
+

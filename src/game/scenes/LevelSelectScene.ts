@@ -3,6 +3,7 @@ import { COLORS, FONTS } from '../theme';
 import { buildGrid, fontForCell, type GridCell } from '../layout';
 import { createButton } from '../ui/Button';
 import { Progress } from '../progress';
+import { t } from '../i18n';
 
 const LEVEL_COUNT = 12;
 
@@ -20,7 +21,7 @@ export class LevelSelectScene extends Phaser.Scene {
 
     // Заголовок.
     this.add
-      .text(width / 2, 48, 'Выбери уровень', {
+      .text(width / 2, 48, t('levelSelect.title'), {
         fontFamily: FONTS.main,
         fontSize: '56px',
         color: '#ffffff',
@@ -33,7 +34,7 @@ export class LevelSelectScene extends Phaser.Scene {
       width: 140,
       height: 72,
       color: COLORS.danger,
-      label: '←',
+      label: t('common.back'),
       onClick: () => this.scene.start('MenuScene'),
     });
 
@@ -125,5 +126,4 @@ export class LevelSelectScene extends Phaser.Scene {
     }
   }
 }
-
 

@@ -4,6 +4,7 @@ import { PreloadScene } from './scenes/PreloadScene';
 import { MenuScene } from './scenes/MenuScene';
 import { LevelSelectScene } from './scenes/LevelSelectScene';
 import { GameScene } from './scenes/GameScene';
+import { SettingsScene } from './scenes/SettingsScene';
 
 /** Логический размер игрового поля (ландшафт / горизонтальная ориентация). */
 export const GAME_WIDTH = 1280;
@@ -26,7 +27,14 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
       debug: false,
     },
   },
-  scene: [BootScene, PreloadScene, MenuScene, LevelSelectScene, GameScene],
+  scene: [
+    BootScene,
+    PreloadScene,
+    MenuScene,
+    LevelSelectScene,
+    GameScene,
+    SettingsScene,
+  ],
   render: {
     antialias: true,
     roundPixels: false,
