@@ -1,18 +1,25 @@
 /**
  * Прогресс игрока. Пока хранится в localStorage.
  * Позже легко заменить на @capacitor/preferences (нативное хранилище).
+ *
+ * Прогресс привязан к сезону: у каждого сезона своя разблокировка и звёзды.
  */
+import { ACTIVE_SEASON, getSeason, type SeasonId } from './seasons';
 
-const STORAGE_KEY = 'kidsgame.progress.v1';
+const STORAGE_KEY = 'kidsgame.progress.v2';
 
-interface ProgressData {
+/** Прогресс одного сезона. */
+interface SeasonProgress {
   /** Максимальный доступный уровень (1-based). */
   unlocked: number;
   /** Звёзды за каждый уровень (индекс = уровень - 1). */
   stars: number[];
 }
 
-const DEFAULT_PROGRESS: ProgressData = {
+/** Прогресс всех сезонов. */
+type ProgressData = Record<string, SeasonProgress>;
+
+const DEFAULT_SEASON_PROGRESS: SeasonProgress = {
   unlocked: 1,
   stars: [],
 };
@@ -20,14 +27,10 @@ const DEFAULT_PROGRESS: ProgressData = {
 function load(): ProgressData {
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
-    if (!raw) return { ...DEFAULT_PROGRESS };
-    const parsed = JSON.parse(raw) as Partial<ProgressData>;
-    return {
-      unlocked: parsed.unlocked ?? 1,
-      stars: parsed.stars ?? [],
-    };
+    if (!raw) return {};
+    return JSON.parse(raw) as ProgressData;
   } catch {
-    return { ...DEFAULT_PROGRESS };
+    return {};
   }
 }
 
@@ -39,28 +42,57 @@ function save(data: ProgressData): void {
   }
 }
 
+function getSeasonProgress(
+  data: ProgressData,
+  seasonId: SeasonId,
+): SeasonProgress {
+  return data[seasonId] ?? { ...DEFAULT_SEASON_PROGRESS };
+}
+
 export const Progress = {
-  getUnlocked(): number {
-    return load().unlocked;
+  /** Максимальный доступный уровень в сезоне (по умолчанию — активном). */
+  getUnlocked(seasonId: SeasonId = ACTIVE_SEASON): number {
+    const data = load();
+    return getSeasonProgress(data, seasonId).unlocked;
   },
 
-  getStars(level: number): number {
+  /** Звёзды за уровень в сезоне (0..3). */
+  getStars(level: number, seasonId: SeasonId = ACTIVE_SEASON): number {
     const data = load();
-    return data.stars[level - 1] ?? 0;
+    const sp = getSeasonProgress(data, seasonId);
+    return sp.stars[level - 1] ?? 0;
   },
 
-  /** Отмечает уровень пройденным, сохраняет звёзды (0..3) и открывает следующий. */
-  setResult(level: number, stars: number): void {
+  /**
+   * Отмечает уровень пройденным, сохраняет звёзды (0..3) и открывает следующий.
+   * Не открывает уровень выше количества уровней в сезоне.
+   */
+  setResult(
+    level: number,
+    stars: number,
+    seasonId: SeasonId = ACTIVE_SEASON,
+  ): void {
     const data = load();
-    data.stars[level - 1] = Math.max(data.stars[level - 1] ?? 0, stars);
-    if (level >= data.unlocked) {
-      data.unlocked = level + 1;
+    const sp = getSeasonProgress(data, seasonId);
+    sp.stars[level - 1] = Math.max(sp.stars[level - 1] ?? 0, stars);
+
+    const maxLevel = getSeason(seasonId).levelCount;
+    if (level >= sp.unlocked && sp.unlocked < maxLevel) {
+      sp.unlocked = level + 1;
     }
+
+    data[seasonId] = sp;
     save(data);
   },
 
-  /** Сброс прогресса (например, родительский контроль). */
-  reset(): void {
-    save({ ...DEFAULT_PROGRESS });
+  /** Сброс прогресса сезона (или всех, если id не указан). */
+  reset(seasonId?: SeasonId): void {
+    if (!seasonId) {
+      save({});
+      return;
+    }
+    const data = load();
+    delete data[seasonId];
+    save(data);
   },
 };

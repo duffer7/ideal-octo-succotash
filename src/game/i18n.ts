@@ -38,10 +38,16 @@ type Dictionary = {
   'settings.language': string;
 
   'levelSelect.title': string;
+  'levelSelect.season': string;
+
+  'season.summer.name': string;
+  'season.summer.cat.sand': string;
+  'season.summer.cat.water': string;
 
   'game.level': string;
   'game.wellDone': string;
   'game.next': string;
+  'game.wrong': string;
 
   'orientation.rotate': string;
 
@@ -61,10 +67,16 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'settings.language': 'Язык',
 
     'levelSelect.title': 'Выбери уровень',
+    'levelSelect.season': 'Лето',
+
+    'season.summer.name': 'Лето',
+    'season.summer.cat.sand': 'Песок',
+    'season.summer.cat.water': 'Вода',
 
     'game.level': 'Уровень {n}',
     'game.wellDone': 'Молодец! ★★★',
     'game.next': 'Дальше',
+    'game.wrong': 'Ой! Попробуй ещё',
 
     'orientation.rotate': 'Поверните устройство горизонтально',
 
@@ -82,10 +94,16 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'settings.language': 'Language',
 
     'levelSelect.title': 'Choose a level',
+    'levelSelect.season': 'Summer',
+
+    'season.summer.name': 'Summer',
+    'season.summer.cat.sand': 'Sand',
+    'season.summer.cat.water': 'Water',
 
     'game.level': 'Level {n}',
     'game.wellDone': 'Well done! ★★★',
     'game.next': 'Next',
+    'game.wrong': 'Oops! Try again',
 
     'orientation.rotate': 'Rotate your device to landscape',
 

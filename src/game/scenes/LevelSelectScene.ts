@@ -4,11 +4,11 @@ import { buildGrid, fontForCell, type GridCell } from '../layout';
 import { createButton } from '../ui/Button';
 import { Progress } from '../progress';
 import { t } from '../i18n';
-
-const LEVEL_COUNT = 12;
+import { ACTIVE_SEASON, getSeason } from '../seasons';
 
 /**
  * LevelSelectScene — выбор уровня в горизонтальной сетке.
+ * Показывает уровни активного сезона (сейчас — «Лето», 10 уровней).
  * Карточки адаптивно располагаются под размер/безопасную зону экрана.
  */
 export class LevelSelectScene extends Phaser.Scene {
@@ -18,14 +18,25 @@ export class LevelSelectScene extends Phaser.Scene {
 
   create(): void {
     const { width } = this.scale;
+    const season = getSeason(ACTIVE_SEASON);
+    const LEVEL_COUNT = season.levelCount;
 
-    // Заголовок.
+    // Заголовок сезона.
     this.add
-      .text(width / 2, 48, t('levelSelect.title'), {
+      .text(width / 2, 36, t(season.nameKey), {
         fontFamily: FONTS.main,
-        fontSize: '56px',
+        fontSize: '60px',
         color: '#ffffff',
         fontStyle: 'bold',
+      })
+      .setOrigin(0.5, 0);
+
+    // Подзаголовок.
+    this.add
+      .text(width / 2, 104, t('levelSelect.title'), {
+        fontFamily: FONTS.main,
+        fontSize: '30px',
+        color: '#eaf6ff',
       })
       .setOrigin(0.5, 0);
 
@@ -38,21 +49,23 @@ export class LevelSelectScene extends Phaser.Scene {
       onClick: () => this.scene.start('MenuScene'),
     });
 
-    // Адаптивная сетка: в ландшафте комфортно 4 колонки.
+    // Адаптивная сетка: 10 уровней — 5 колонок × 2 строки.
     const cells = buildGrid(this, LEVEL_COUNT, {
-      maxColumns: 4,
-      maxRows: 3,
-      padding: 32,
-      gap: 24,
+      maxColumns: 5,
+      maxRows: 2,
+      padding: 40,
+      gap: 20,
     });
 
-    const unlocked = Progress.getUnlocked();
+    const unlocked = Progress.getUnlocked(ACTIVE_SEASON);
+    const seasonColors = [COLORS.accent, COLORS.primary];
 
     cells.forEach((cell, i) => {
       const level = i + 1;
       const isUnlocked = level <= unlocked;
-      const stars = Progress.getStars(level);
-      this.createLevelCard(cell, level, isUnlocked, stars);
+      const stars = Progress.getStars(level, ACTIVE_SEASON);
+      const color = seasonColors[(level - 1) % seasonColors.length];
+      this.createLevelCard(cell, level, isUnlocked, stars, color);
     });
   }
 
@@ -61,13 +74,14 @@ export class LevelSelectScene extends Phaser.Scene {
     level: number,
     unlocked: boolean,
     stars: number,
+    color: number,
   ): void {
     const size = Math.min(cell.width, cell.height);
     const radius = size * 0.22;
 
     const bg = this.add.graphics();
-    const color = unlocked ? COLORS.primary : 0x8a8a8a;
-    bg.fillStyle(color, unlocked ? 1 : 0.6);
+    const cardColor = unlocked ? color : 0x8a8a8a;
+    bg.fillStyle(cardColor, unlocked ? 1 : 0.6);
     bg.fillRoundedRect(-size / 2, -size / 2, size, size, radius);
 
     // Номер уровня.
@@ -102,6 +116,7 @@ export class LevelSelectScene extends Phaser.Scene {
         new Phaser.Geom.Rectangle(0, 0, size, size),
         Phaser.Geom.Rectangle.Contains,
       );
+      container.input!.cursor = 'pointer';
       container.on('pointerdown', () => {
         this.tweens.add({
           targets: container,
@@ -126,4 +141,3 @@ export class LevelSelectScene extends Phaser.Scene {
     }
   }
 }
-

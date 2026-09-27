@@ -4,21 +4,44 @@ import { getSafeBounds } from '../safeArea';
 import { createButton } from '../ui/Button';
 import { Progress } from '../progress';
 import { t } from '../i18n';
-
-const TOTAL_TARGETS = 3;
+import {
+  ACTIVE_SEASON,
+  getLevel,
+  getSeason,
+  type FallingItem,
+  type LevelConfig,
+} from '../seasons';
+import { summerItems } from '../seasons/summer';
 
 interface GameSceneData {
   level?: number;
 }
 
+/** Падающий объект как игровой объект. */
+interface FallingObject {
+  container: Phaser.GameObjects.Container;
+  categoryId: string;
+  /** Заблокирован ли объект (уже успешно перетащен). */
+  done: boolean;
+}
+
 /**
- * GameScene — демонстрационная игровая сцена.
- * Механика: перетащить фигуры в цель. Раскладка учитывает safe area.
+ * GameScene — уровень сортировки.
+ * Сверху падают объекты (ракушки/звёзды), игрок перетаскивает их в нужную
+ * корзину. Уровень пройден, когда рассортировано targetCount объектов.
  */
 export class GameScene extends Phaser.Scene {
   private level = 1;
-  private score = 0;
+  private config!: LevelConfig;
+  private sorted = 0;
+  private mistakes = 0;
+
   private scoreText!: Phaser.GameObjects.Text;
+
+  private items: FallingObject[] = [];
+  private baskets = new Map<string, { x: number; y: number; radius: number }>();
+  private spawnTimer?: Phaser.Time.TimerEvent;
+  private bounds!: Phaser.Geom.Rectangle;
 
   constructor() {
     super('GameScene');
@@ -29,168 +52,444 @@ export class GameScene extends Phaser.Scene {
   }
 
   create(): void {
-    const bounds = getSafeBounds(this.scale, 24);
-    this.score = 0;
+    this.config = getLevel(ACTIVE_SEASON, this.level);
+    this.bounds = getSafeBounds(this.scale, 24);
+    this.sorted = 0;
+    this.mistakes = 0;
+    this.items = [];
+    this.baskets.clear();
 
-    // Кнопка «назад» — в левом верхнем углу безопасной зоны.
-    createButton(this, bounds.x + 50, bounds.y + 50, {
+    this.createBackground();
+    this.createBackButton();
+    this.createHud();
+    this.createBaskets();
+
+    // Запускаем спавн объектов.
+    this.spawnTimer = this.time.addEvent({
+      delay: this.config.spawnIntervalMs,
+      callback: () => this.spawnItem(),
+      loop: true,
+    });
+
+    // Небольшая задержка перед первым объектом.
+    this.time.delayedCall(600, () => this.spawnItem());
+
+    this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      this.spawnTimer?.remove();
+    });
+  }
+
+  // ---------------------------------------------------------------------------
+  // Визуальные элементы
+  // ---------------------------------------------------------------------------
+
+  /** Фон пляжа/моря (картинка, если загружена, иначе цвет-заглушка). */
+  private createBackground(): void {
+    const { width, height } = this.scale;
+    const bg = this.config.background;
+
+    if (bg.key && this.textures.exists(bg.key)) {
+      this.add.image(width / 2, height / 2, bg.key).setDisplaySize(width, height);
+    } else {
+      this.add.rectangle(width / 2, height / 2, width, height, bg.color);
+      // Условная «полоса моря» снизу для атмосферы пляжа.
+      this.add.rectangle(
+        width / 2,
+        height * 0.78,
+        width,
+        height * 0.44,
+        COLORS.background,
+        0.45,
+      );
+    }
+  }
+
+  private createBackButton(): void {
+    createButton(this, this.bounds.x + 50, this.bounds.y + 50, {
       width: 90,
       height: 72,
       color: COLORS.danger,
-
       label: t('common.back'),
       onClick: () => this.scene.start('LevelSelectScene'),
     });
+  }
 
-    // Заголовок уровня и счёт.
+  private createHud(): void {
+    const season = getSeason(ACTIVE_SEASON);
+    const centerX = this.bounds.centerX;
+
     this.add
-      .text(bounds.centerX, bounds.y, t('game.level', { n: this.level }), {
+      .text(centerX, this.bounds.y, t('game.level', { n: this.level }), {
         fontFamily: FONTS.main,
         fontSize: '44px',
         color: '#ffffff',
         fontStyle: 'bold',
       })
-      .setOrigin(0.5, 0);
+      .setOrigin(0.5, 0)
+      .setDepth(20);
+
+    this.add
+      .text(centerX, this.bounds.y + 50, t(season.nameKey), {
+        fontFamily: FONTS.main,
+        fontSize: '28px',
+        color: '#eaf6ff',
+      })
+      .setOrigin(0.5, 0)
+      .setDepth(20);
 
     this.scoreText = this.add
-      .text(bounds.right, bounds.y, `0 / ${TOTAL_TARGETS}`, {
+      .text(
+        this.bounds.right,
+        this.bounds.y,
+        `${this.sorted} / ${this.config.targetCount}`,
+        {
+          fontFamily: FONTS.main,
+          fontSize: '44px',
+          color: '#ffffff',
+          fontStyle: 'bold',
+        },
+      )
+      .setOrigin(1, 0)
+      .setDepth(20);
+  }
+
+  /** Две корзины-приёмника внизу экрана. */
+  private createBaskets(): void {
+    const { baskets } = this.config;
+    const gap = 60;
+    const basketSize = Math.min(this.bounds.height * 0.32, 220);
+    const totalW = basketSize * baskets.length + gap * (baskets.length - 1);
+    const startX = this.bounds.centerX - totalW / 2 + basketSize / 2;
+    const y = this.bounds.bottom - basketSize * 0.55;
+
+    baskets.forEach((basket, i) => {
+      const x = startX + i * (basketSize + gap);
+      this.createBasket(x, y, basketSize, basket);
+    });
+  }
+
+  private createBasket(
+    x: number,
+    y: number,
+    size: number,
+    basket: LevelConfig['baskets'][number],
+  ): void {
+    const children: Phaser.GameObjects.GameObject[] = [];
+
+    if (basket.image?.key && this.textures.exists(basket.image.key)) {
+      const img = this.add.image(0, 0, basket.image.key);
+      img.setDisplaySize(size, size);
+      children.push(img);
+    } else {
+      // Заглушка-корзина: скруглённый «ящик» с цветом категории.
+      const g = this.add.graphics();
+      g.fillStyle(basket.color, 1);
+      g.fillRoundedRect(-size / 2, -size / 2, size, size, size * 0.16);
+      g.lineStyle(6, 0xffffff, 0.9);
+      g.strokeRoundedRect(-size / 2, -size / 2, size, size, size * 0.16);
+      children.push(g);
+    }
+
+    // Подпись корзины (Песок / Вода).
+    const label = this.add
+      .text(0, size * 0.34, t(basket.labelKey), {
         fontFamily: FONTS.main,
-        fontSize: '44px',
+        fontSize: `${size * 0.16}px`,
         color: '#ffffff',
         fontStyle: 'bold',
       })
-      .setOrigin(1, 0);
+      .setOrigin(0.5);
+    children.push(label);
 
-    // Перетаскиваемые фигуры — колонка слева (внутри safe area).
-    const colors = [COLORS.primary, COLORS.secondary, COLORS.accent];
-    const leftX = bounds.x + bounds.width * 0.15;
-    colors.forEach((color, i) => {
-      this.createDraggableCircle(
-        leftX,
-        bounds.y + bounds.height * 0.35 + i * (bounds.height * 0.22),
-        color,
-      );
+    this.add.container(x, y, children).setDepth(5);
+
+    this.baskets.set(basket.categoryId, {
+      x,
+      y,
+      radius: size / 2,
     });
+  }
 
-    // Цель — справа.
-    const target = this.add.circle(
-      bounds.x + bounds.width * 0.8,
-      bounds.centerY,
-      Math.min(bounds.height * 0.22, 140),
-      0xffffff,
-      0.25,
+  // ---------------------------------------------------------------------------
+  // Падающие объекты
+  // ---------------------------------------------------------------------------
+
+  /** Создаёт падающий объект сверху и запускает его движение вниз. */
+  private spawnItem(): void {
+    const def = this.pickItemDef();
+    const x = Phaser.Math.Between(
+      Math.round(this.bounds.x + 60),
+      Math.round(this.bounds.right - 60),
     );
-    target.setStrokeStyle(6, 0xffffff, 0.8);
-    target.setName('target');
-  }
 
-  private createDraggableCircle(x: number, y: number, color: number): void {
-    const radius = Math.min(this.scale.height * 0.09, 64);
-    const circle = this.add.circle(x, y, radius, color);
-    circle.setInteractive({ useHandCursor: true });
-    this.input.setDraggable(circle);
+    const container = this.createItemVisual(x, this.bounds.y + 40, def);
+    const record: FallingObject = { container, categoryId: def.categoryId, done: false };
+    this.items.push(record);
 
-    circle.on('drag', (_p: Phaser.Input.Pointer, dragX: number, dragY: number) => {
-      circle.x = dragX;
-      circle.y = dragY;
+    this.input.setDraggable(container);
+
+    // Падение как tween; при достижении низа — промах.
+    const fallTargetY = this.bounds.bottom - 20;
+    const distance = fallTargetY - container.y;
+    const duration = (distance / this.config.fallSpeed) * 1000;
+
+    container.setData('fallTween', null);
+    const tween = this.tweens.add({
+      targets: container,
+      y: fallTargetY,
+      duration,
+      onComplete: () => this.onMissed(record),
     });
+    container.setData('fallTween', tween);
 
-    circle.on('dragend', () => {
-      const target = this.children.getByName('target') as
-        | Phaser.GameObjects.Arc
-        | null;
-      if (!target) return;
-
-      const dist = Phaser.Math.Distance.Between(
-        circle.x,
-        circle.y,
-        target.x,
-        target.y,
-      );
-
-      if (dist < target.radius) {
-        this.onCorrectDrop(circle);
-      } else {
-        this.returnCircle(circle, x, y);
-      }
-    });
-  }
-
-  /** Если фигуру уронили не туда — плавно возвращаем её на место. */
-  private returnCircle(
-    circle: Phaser.GameObjects.Arc,
-    homeX: number,
-    homeY: number,
-  ): void {
-    this.tweens.add({
-      targets: circle,
-      x: homeX,
-      y: homeY,
-      duration: 220,
-      ease: 'Back.out',
-    });
-  }
-
-  private onCorrectDrop(circle: Phaser.GameObjects.Arc): void {
-    // Отключаем повторное перетаскивание и ввод.
-    this.input.setDraggable(circle, false);
-    circle.disableInteractive();
-
-    this.score += 1;
-    this.scoreText.setText(`${this.score} / ${TOTAL_TARGETS}`);
-
-    this.tweens.add({
-      targets: circle,
-      scale: 1.3,
-      duration: 120,
-      yoyo: true,
-      onComplete: () => {
-        this.tweens.add({
-          targets: circle,
-          alpha: 0,
-          scale: 0,
-          duration: 250,
-          onComplete: () => circle.destroy(),
-        });
+    container.on(
+      'drag',
+      (_p: Phaser.Input.Pointer, dragX: number, dragY: number) => {
+        if (record.done) return;
+        // Останавливаем падение, пока объект тащат.
+        (container.getData('fallTween') as Phaser.Tweens.Tween | null)?.pause();
+        container.x = dragX;
+        container.y = dragY;
       },
+    );
+
+    container.on('dragend', () => this.onDrop(record));
+  }
+
+  /** Рисует визуал объекта (картинка или цветная заглушка). */
+  private createItemVisual(
+    x: number,
+    y: number,
+    def: FallingItem,
+  ): Phaser.GameObjects.Container {
+    const size = Math.min(this.bounds.height * 0.16, 110);
+    let visual: Phaser.GameObjects.GameObject;
+
+    if (def.image?.key && this.textures.exists(def.image.key)) {
+      const img = this.add.image(0, 0, def.image.key);
+      img.setDisplaySize(size, size);
+      visual = img;
+    } else {
+      // Заглушка: круг с контуром в цвете категории.
+      const c = this.add.circle(0, 0, size / 2, def.color);
+      c.setStrokeStyle(6, 0xffffff, 0.85);
+      visual = c;
+    }
+
+    const container = this.add.container(x, y, [visual]).setDepth(10);
+    container.setSize(size, size);
+    container.setInteractive(
+      new Phaser.Geom.Rectangle(0, 0, size, size),
+      Phaser.Geom.Rectangle.Contains,
+    );
+    container.input!.cursor = 'pointer';
+    return container;
+  }
+
+  /** Выбирает определение объекта по весам категорий. */
+  private pickItemDef(): FallingItem {
+    const defs = summerItems;
+    const weights = this.config.spawnWeights;
+
+    if (!weights || defs.length === 0) {
+      // Равномерный выбор среди категорий уровня.
+      const cat = Phaser.Utils.Array.GetRandom(this.config.categories);
+      return {
+        categoryId: cat.id,
+        color: cat.color,
+      };
+    }
+
+    const ids = Object.keys(weights);
+    const total = ids.reduce((s, id) => s + (weights[id] ?? 0), 0);
+    let r = Math.random() * total;
+    let chosen = ids[0];
+    for (const id of ids) {
+      r -= weights[id] ?? 0;
+      if (r <= 0) {
+        chosen = id;
+        break;
+      }
+    }
+
+    const match = defs.find((d) => d.categoryId === chosen);
+    if (match) return match;
+
+    const cat = this.config.categories.find((c) => c.id === chosen);
+    return { categoryId: chosen, color: cat?.color ?? 0xffffff };
+  }
+
+  // ---------------------------------------------------------------------------
+  // Обработка перетаскивания
+  // ---------------------------------------------------------------------------
+
+  private onDrop(record: FallingObject): void {
+    if (record.done) return;
+    const { container } = record;
+
+    // Ищем корзину, в которую попал объект.
+    let hitCategory: string | null = null;
+    for (const [categoryId, basket] of this.baskets) {
+      const dist = Phaser.Math.Distance.Between(
+        container.x,
+        container.y,
+        basket.x,
+        basket.y,
+      );
+      if (dist < basket.radius) {
+        hitCategory = categoryId;
+        break;
+      }
+    }
+
+    if (hitCategory === null) {
+      // Не попали ни в одну корзину — продолжаем падение.
+      this.resumeFall(record);
+      return;
+    }
+
+    if (hitCategory === record.categoryId) {
+      this.onCorrect(record);
+    } else {
+      this.onWrong(record);
+    }
+  }
+
+  /** Продолжает падение объекта с текущей высоты. */
+  private resumeFall(record: FallingObject): void {
+    const { container } = record;
+    const tween = container.getData('fallTween') as Phaser.Tweens.Tween | null;
+    if (tween) {
+      // Пересоздаём tween от текущей позиции до низа.
+      tween.remove();
+      const fallTargetY = this.bounds.bottom - 20;
+      const distance = fallTargetY - container.y;
+      if (distance <= 0) {
+        this.onMissed(record);
+        return;
+      }
+      const duration = (distance / this.config.fallSpeed) * 1000;
+      const newTween = this.tweens.add({
+        targets: container,
+        y: fallTargetY,
+        duration,
+        onComplete: () => this.onMissed(record),
+      });
+      container.setData('fallTween', newTween);
+    }
+  }
+
+  private onCorrect(record: FallingObject): void {
+    record.done = true;
+    this.input.setDraggable(record.container, false);
+    record.container.disableInteractive();
+
+    (record.container.getData('fallTween') as Phaser.Tweens.Tween | null)?.remove();
+
+    this.sorted += 1;
+    this.updateHud();
+
+    this.tweens.add({
+      targets: record.container,
+      scale: 0.2,
+      alpha: 0,
+      duration: 220,
+      onComplete: () => record.container.destroy(),
     });
 
-    if (this.score >= TOTAL_TARGETS) {
+    if (this.sorted >= this.config.targetCount) {
       this.finishLevel();
     }
   }
 
+  private onWrong(record: FallingObject): void {
+    this.mistakes += 1;
+    this.updateHud();
+
+    this.cameras.main.flash(200, 255, 80, 80);
+
+    // Возвращаем объект наверх и продолжаем падение.
+    const { container } = record;
+    (container.getData('fallTween') as Phaser.Tweens.Tween | null)?.remove();
+    const startY = this.bounds.y + 40;
+    this.tweens.add({
+      targets: container,
+      y: startY,
+      duration: 300,
+      ease: 'Back.out',
+      onComplete: () => this.resumeFall(record),
+    });
+  }
+
+  /** Объект упал за пределы корзин — мягко возвращаем наверх. */
+  private onMissed(record: FallingObject): void {
+    if (record.done) return;
+    const { container } = record;
+    const startY = this.bounds.y + 40;
+    this.tweens.add({
+      targets: container,
+      y: startY,
+      duration: 250,
+      ease: 'Quad.in',
+      onComplete: () => this.resumeFall(record),
+    });
+  }
+
+  private updateHud(): void {
+    this.scoreText.setText(`${this.sorted} / ${this.config.targetCount}`);
+  }
+
+  // ---------------------------------------------------------------------------
+  // Завершение уровня
+  // ---------------------------------------------------------------------------
+
   /** Уровень пройден: сохраняем прогресс и показываем результат. */
   private finishLevel(): void {
-    const stars = 3; // упрощённо; позже — по числу ошибок/времени
-    Progress.setResult(this.level, stars);
+    this.spawnTimer?.remove();
+    this.time.removeAllEvents();
 
-    const bounds = getSafeBounds(this.scale, 24);
+    // Звёзды: 3 без ошибок, 2 при 1–2 ошибках, 1 при большем числе.
+    const stars = this.mistakes === 0 ? 3 : this.mistakes <= 2 ? 2 : 1;
+    Progress.setResult(this.level, stars, ACTIVE_SEASON);
 
-    const panel = this.add
-      .rectangle(bounds.centerX, bounds.centerY, 520, 240, 0x000000, 0.6)
-      .setStrokeStyle(4, 0xffffff, 0.8);
+    const { centerX, centerY } = this.bounds;
 
-    const text = this.add
+    this.add
+      .rectangle(centerX, centerY, 560, 260, 0x000000, 0.6)
+      .setStrokeStyle(4, 0xffffff, 0.8)
+      .setDepth(30);
 
-      .text(bounds.centerX, bounds.centerY - 40, t('game.wellDone'), {
+    this.add
+      .text(centerX, centerY - 60, t('game.wellDone'), {
         fontFamily: FONTS.main,
         fontSize: '56px',
         color: '#ffe066',
         fontStyle: 'bold',
       })
-      .setOrigin(0.5);
+      .setOrigin(0.5)
+      .setDepth(31);
 
-    const next = createButton(this, bounds.centerX, bounds.centerY + 60, {
-      width: 280,
+    const starStr = '★'.repeat(stars) + '☆'.repeat(3 - stars);
+    this.add
+      .text(centerX, centerY + 10, starStr, {
+        fontFamily: FONTS.main,
+        fontSize: '56px',
+        color: '#ffe066',
+      })
+      .setOrigin(0.5)
+      .setDepth(31);
+
+    const season = getSeason(ACTIVE_SEASON);
+    const isLast = this.level >= season.levelCount;
+    const nextLabel = isLast ? t('common.back') : t('game.next');
+
+    const next = createButton(this, centerX, centerY + 90, {
+      width: 300,
       height: 80,
       color: COLORS.secondary,
-      label: t('game.next'),
+      label: nextLabel,
       onClick: () => this.scene.start('LevelSelectScene'),
     });
-
-    panel.setDepth(10);
-    text.setDepth(11);
-    next.setDepth(11);
+    next.setDepth(31);
   }
 }

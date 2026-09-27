@@ -38,6 +38,7 @@ src/
 └── game/
     ├── config.ts               # конфиг Phaser (1280x720, сцены, физика)
     ├── theme.ts                # палитра и шрифты
+    ├── i18n.ts                 # локализация (RU/EN): t(), setLanguage()
     ├── safeArea.ts             # безопасная зона (brow/скругления)
     ├── layout.ts               # адаптивная сетка
     ├── progress.ts             # сохранение прогресса
@@ -48,8 +49,9 @@ src/
         ├── PreloadScene.ts     # загрузка ассетов + прогресс-бар
         ├── MenuScene.ts        # главное меню
         ├── LevelSelectScene.ts # выбор уровня (горизонтальная сетка)
-        └── GameScene.ts        # игровая механика (drag & drop)
-public/assets/                  # изображения, звуки, шрифты
+        ├── GameScene.ts        # игровая механика (drag & drop)
+        └── SettingsScene.ts    # настройки (выбор языка RU/EN)
+public/assets/                  # изображения, звуки, шрифты (см. раздел «Ассеты»)
 ```
 
 ## Ориентация экрана (ландшафт)
@@ -107,6 +109,76 @@ cells.forEach((cell) => { /* cell.x, cell.y, cell.width, cell.height */ });
 звёзды, заблокированные — замок. Прогресс хранится в `src/game/progress.ts`
 (localStorage; позже заменяется на `@capacitor/preferences`).
 
+## Настройки и локализация (RU/EN)
+
+- `src/game/i18n.ts` — модуль локализации без внешних зависимостей:
+  `t('menu.play')` возвращает строку текущего языка, `setLanguage('en')` меняет
+  язык (сохраняется в `localStorage`), `onLanguageChange(cb)` — подписка на смену.
+- `SettingsScene` — экран настроек с выбором языка (открывается из главного меню).
+- Язык по умолчанию: сохранённый → язык браузера → английский.
+- Чтобы добавить язык: расширьте тип `Language`, массив `LANGUAGES` и словарь
+  `DICTIONARIES` в `i18n.ts` — экран настроек построит кнопки автоматически.
+
+## Ассеты (картинки, спрайты, звук)
+
+Все рантайм-ассеты лежат в **`public/assets/`**. Именно `public/`, а не `src/`:
+содержимое копируется в `dist/` без хеширования имён, поэтому путь в коде
+совпадает с путём в собранном приложении и корректно работает в Capacitor.
+
+```
+public/assets/
+├── images/
+│   ├── backgrounds/   # фоны
+│   ├── ui/            # кнопки, панели, иконки
+│   └── levels/        # иллюстрации уровней
+├── sprites/
+│   ├── characters/    # персонажи
+│   └── items/         # предметы, фигуры
+├── atlases/           # texture atlas: *.png + *.json (рекомендуется)
+├── audio/
+│   ├── music/         # фоновая музыка
+│   └── sfx/           # короткие звуки
+├── audiosprites/      # аудио-спрайты (наборы звуков)
+├── fonts/             # bitmap/webfont
+└── localization/
+    ├── ru/            # озвучка/тексты (русский)
+    └── en/            # озвучка/тексты (английский)
+```
+
+Подробности — в `public/assets/README.md`.
+
+### Как загружать
+
+Пути всегда **относительные, без ведущего `/`** (иначе ломается нативная сборка):
+
+```ts
+// в PreloadScene.loadAssets() (src/game/scenes/PreloadScene.ts)
+this.load.image('background', 'assets/images/backgrounds/background.png');
+this.load.atlas('game', 'assets/atlases/game.png', 'assets/atlases/game.json');
+this.load.audio('click', 'assets/audio/sfx/click.mp3');
+```
+
+### Локализованные ассеты
+
+Языко-независимые ассеты (фоны, спрайты) — общие. Зависящие от языка (озвучка
+цифр/букв, подписи-картинки) кладите в `localization/<lang>/` и грузите с учётом
+текущего языка:
+
+```ts
+import { getLanguage } from './i18n';
+const lang = getLanguage();
+this.load.audio('voice_0', `assets/localization/${lang}/voice_0.mp3`);
+```
+
+### Рекомендации
+
+- **Спрайты** пакуйте в атлас (TexturePacker / free-tex-packer): 1 запрос вместо
+  десятков и меньше памяти на мобилках.
+- **Звук**: для iOS — `.m4a`/`.aac`, для web/Android — `.ogg`/`.mp3`. Передавайте
+  массив источников — Phaser выберет поддерживаемый формат.
+- **Большие игры**: грузите ассеты поуровнево в `GameScene.preload()`, а не всё
+  сразу в `PreloadScene`, — это ускоряет старт.
+
 ## Сборка и добавление платформ
 
 ```bash
@@ -149,8 +221,8 @@ npm i @capacitor-community/text-to-speech  # озвучка (для обучен
 ## Дальнейшие шаги
 
 - [ ] Реальные ассеты (картинки, звуки, обучающие задания)
-- [ ] Родительский экран/настройки
-- [ ] Локализация (RU/EN)
+- [x] Настройки (экран выбора языка)
+- [x] Локализация (RU/EN)
 - [ ] Звуковое сопровождение заданий (TTS)
 - [ ] Нативное хранилище прогресса (`@capacitor/preferences`)
 
