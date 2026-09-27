@@ -1,4 +1,4 @@
-import type { Season, LevelConfig, Category, Basket, FallingItem } from './types';
+import type { Season, LevelConfig, Category, Basket, FallingItem, AssetRef } from './types';
 
 /**
  * Сезон «Лето».
@@ -52,11 +52,27 @@ const summerItemDefs: FallingItem[] = [
   },
 ];
 
-/** Фон пляжа/моря (пока — цвета-заглушки). */
+/** Фон пляжа/моря. */
 const beachBackground = {
-  color: 0x4fc3f7, // небесно-голубой
-  // path: 'assets/images/summer/background-beach.png',
+  color: 0x4fc3f7, // небесно-голубой (фолбэк, пока картинка не загружена)
+  key: 'summer_bg',
+  path: 'assets/images/backgrounds/summer_background.jpg',
 };
+
+/** Слой облаков поверх фона (отдельная картинка с прозрачностью). */
+const beachClouds = {
+  key: 'summer_clouds',
+  path: 'assets/images/backgrounds/summer_clouds.png',
+};
+
+/**
+ * Ассеты лета для загрузки в PreloadScene.
+ * Держим пути здесь — рядом с уровнями, которые их используют.
+ */
+export const summerAssets: AssetRef[] = [
+  { key: beachBackground.key, path: beachBackground.path },
+  { key: beachClouds.key, path: beachClouds.path },
+];
 
 /** Базовый уровень лета с прогрессией сложности. */
 function makeSummerLevel(
@@ -71,6 +87,7 @@ function makeSummerLevel(
   return {
     number,
     background: { ...beachBackground },
+    clouds: { ...beachClouds },
     categories: summerCategories,
     baskets: summerBaskets,
     spawnWeights: { [CAT_SAND]: 0.5, [CAT_WATER]: 0.5 },
@@ -100,3 +117,4 @@ export const summer: Season = {
 
 /** Падающие объекты сезона «Лето» (для GameScene). */
 export const summerItems: FallingItem[] = [...summerItemDefs];
+

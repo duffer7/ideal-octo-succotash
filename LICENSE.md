@@ -1,0 +1,1 @@
+Copyright Artemii Gushcha 2026

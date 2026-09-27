@@ -61,6 +61,11 @@ export interface LevelConfig {
   number: number;
   /** Фон сцены (картинка опциональна — есть цветной фолбэк). */
   background: AssetRef & { color: number };
+  /**
+   * Слой облаков поверх фона (опционально).
+   * Рисуется отдельно от фона, чтобы облака и фон жили независимо.
+   */
+  clouds?: AssetRef;
   /** Категории объектов. */
   categories: Category[];
   /** Корзины-приёмники. */
@@ -89,4 +94,5 @@ export interface Season {
   /** Уровни сезона. */
   levels: LevelConfig[];
 }
+
 

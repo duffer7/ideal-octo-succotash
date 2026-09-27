@@ -1,5 +1,7 @@
 import Phaser from 'phaser';
 import { getLanguage } from '../i18n';
+import { summerAssets } from '../seasons/summer';
+import { assetUrl } from '../assets';
 
 /**
  * PreloadScene — загрузка ассетов с индикатором прогресса.
@@ -14,6 +16,17 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   preload(): void {
+    // Логируем ошибки загрузки: без картинки игра рисует цветную заглушку,
+    // поэтому «тихий» пропуск ассета легко не заметить.
+    this.load.on('loaderror', (file: Phaser.Loader.File) => {
+      console.warn(
+        '[Preload] Не удалось загрузить ассет:',
+        file.key,
+        '->',
+        (file as Phaser.Loader.File & { src?: string }).src ?? file.url,
+      );
+    });
+
     this.createProgressBar();
     this.loadAssets();
 
@@ -29,9 +42,12 @@ export class PreloadScene extends Phaser.Scene {
     const lang = getLanguage();
 
     // === Изображения ===
-    // Фоны -> assets/images/backgrounds/
-    // this.load.image('background', 'assets/images/backgrounds/background.png');
-
+    // Фоны -> assets/images/backgrounds/ (пути заданы в seasons/summer.ts)
+    for (const asset of summerAssets) {
+      if (asset.key && asset.path) {
+        this.load.image(asset.key, assetUrl(asset.path));
+      }
+    }
     // UI -> assets/images/ui/
     // this.load.image('button', 'assets/images/ui/button.png');
 
@@ -99,4 +115,5 @@ export class PreloadScene extends Phaser.Scene {
     });
   }
 }
+
 

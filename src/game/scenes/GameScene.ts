@@ -102,6 +102,45 @@ export class GameScene extends Phaser.Scene {
         0.45,
       );
     }
+
+    // Отдельный слой облаков поверх фона (если картинка облаков загружена).
+    const clouds = this.config.clouds;
+    if (clouds?.key && this.textures.exists(clouds.key)) {
+      this.createClouds(width, height * 0.3);
+    }
+  }
+
+  /**
+   * Кладёт слой облаков поверх фона и заставляет их медленно плыть вбок,
+   * заворачиваясь при выходе за край экрана (бесшовный дрейф).
+   */
+  private createClouds(width: number, cloudsHeight: number): void {
+    // Рисуем облака чуть шире экрана, чтобы дрейф был незаметно бесшовным.
+    const overlap = width * 0.1;
+    const cloudImage = this.add
+      .image(0, 0, this.config.clouds!.key!)
+      .setOrigin(0, 0)
+      .setDisplaySize(width + overlap, cloudsHeight);
+
+    // Плавный дрейф вправо — туда-обратно, без рывков на краях.
+    this.tweens.add({
+      targets: cloudImage,
+      x: -overlap,
+      duration: 24000,
+      ease: 'Sine.inOut',
+      yoyo: true,
+      repeat: -1,
+    });
+
+    // Лёгкое вертикальное покачивание, чтобы облака «дышали».
+    this.tweens.add({
+      targets: cloudImage,
+      y: cloudsHeight * 0.03,
+      duration: 6000,
+      ease: 'Sine.inOut',
+      yoyo: true,
+      repeat: -1,
+    });
   }
 
   private createBackButton(): void {

@@ -1,0 +1,11 @@
+name: Codegraph
+version: 0.0.1
+schema: v1
+mcpServers:
+  - name: codegraph
+    type: stdio
+    command: /usr/local/bin/codegraph
+    args:
+      - serve
+      - --mcp
+    alwaysLoad: true
