@@ -49,6 +49,7 @@ export class PreloadScene extends Phaser.Scene {
       }
     }
     // UI -> assets/images/ui/
+    this.load.image('lock', assetUrl('assets/images/ui/lock.png'));
     // this.load.image('button', 'assets/images/ui/button.png');
 
     // Иллюстрации уровней -> assets/images/levels/
@@ -115,5 +116,4 @@ export class PreloadScene extends Phaser.Scene {
     });
   }
 }
-
 

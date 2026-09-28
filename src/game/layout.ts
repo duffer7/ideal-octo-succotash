@@ -24,6 +24,11 @@ export interface GridOptions {
   gap?: number;
   /** Ограничение на соотношение сторон ячейки (width/height). */
   maxAspect?: number;
+  /**
+   * Дополнительный отступ сверху (логические пиксели): резервирует место
+   * под заголовок/шапку, чтобы сетка не наезжала на верхние элементы.
+   */
+  topOffset?: number;
 }
 
 /**
@@ -39,9 +44,12 @@ export function buildGrid(
   count: number,
   options: GridOptions,
 ): GridCell[] {
-  const { maxColumns, maxRows, padding = 24, gap = 20, maxAspect = 1.6 } = options;
+  const { maxColumns, maxRows, padding = 24, gap = 20, maxAspect = 1.6, topOffset = 0 } = options;
 
   const bounds = getSafeBounds(scene.scale, padding);
+
+  // Освобождаем место сверху под заголовок и т.п.
+  const availHeight = bounds.height - topOffset;
 
   // Ищем наилучшее число колонок: стараемся заполнить площадь равномерно.
   let best: { cols: number; rows: number; cellW: number; cellH: number } | null =
@@ -52,7 +60,7 @@ export function buildGrid(
     if (rows > maxRows) continue;
 
     const cellW = (bounds.width - gap * (cols - 1)) / cols;
-    const cellH = (bounds.height - gap * (rows - 1)) / rows;
+    const cellH = (availHeight - gap * (rows - 1)) / rows;
 
     if (cellW <= 0 || cellH <= 0) continue;
 
@@ -76,7 +84,7 @@ export function buildGrid(
         x: bounds.centerX,
         y: bounds.centerY,
         width: bounds.width,
-        height: bounds.height,
+        height: availHeight,
         row: 0,
         col: 0,
       },
@@ -89,7 +97,7 @@ export function buildGrid(
   const totalW = cellW * cols + gap * (cols - 1);
   const totalH = cellH * rows + gap * (rows - 1);
   const startX = bounds.x + (bounds.width - totalW) / 2 + cellW / 2;
-  const startY = bounds.y + (bounds.height - totalH) / 2 + cellH / 2;
+  const startY = bounds.y + topOffset + (availHeight - totalH) / 2 + cellH / 2;
 
   const cells: GridCell[] = [];
   for (let i = 0; i < count; i++) {
@@ -112,3 +120,5 @@ export function buildGrid(
 export function fontForCell(cell: GridCell, factor = 0.4): number {
   return Math.min(cell.width, cell.height) * factor;
 }
+
+

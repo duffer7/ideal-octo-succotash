@@ -55,6 +55,9 @@ export class LevelSelectScene extends Phaser.Scene {
       maxRows: 2,
       padding: 40,
       gap: 20,
+      // Резервируем место под заголовок и кнопку «назад», чтобы сетка
+      // не наезжала на верхние элементы.
+      topOffset: 160,
     });
 
     const unlocked = Progress.getUnlocked(ACTIVE_SEASON);
@@ -84,9 +87,9 @@ export class LevelSelectScene extends Phaser.Scene {
     bg.fillStyle(cardColor, unlocked ? 1 : 0.6);
     bg.fillRoundedRect(-size / 2, -size / 2, size, size, radius);
 
-    // Номер уровня.
+    // Номер уровня / замок для закрытых.
     const num = this.add
-      .text(0, unlocked ? -size * 0.08 : 0, unlocked ? String(level) : '🔒', {
+      .text(0, unlocked ? -size * 0.08 : 0, unlocked ? String(level) : '', {
         fontFamily: getMainFont(getLanguage()),
         fontSize: `${fontForCell({ ...cell, width: size, height: size }, 0.45)}px`,
         color: '#ffffff',
@@ -95,6 +98,16 @@ export class LevelSelectScene extends Phaser.Scene {
       .setOrigin(0.5);
 
     const children: Phaser.GameObjects.GameObject[] = [bg, num];
+
+    // Иконка замка для закрытых уровней.
+    if (!unlocked) {
+      // Коэф размера иконки замка
+      const coeff = 0.7;
+      const lock = this.add
+        .image(0, 0, 'lock')
+        .setDisplaySize(size * coeff, size * coeff);
+      children.push(lock);
+    }
 
     // Звёзды под номером.
     if (unlocked && stars > 0) {
@@ -141,3 +154,5 @@ export class LevelSelectScene extends Phaser.Scene {
     }
   }
 }
+
+
