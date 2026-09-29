@@ -1,4 +1,5 @@
 import Phaser from 'phaser';
+import { UI } from '../palette';
 
 /**
  * BootScene — самая первая сцена.
@@ -21,7 +22,8 @@ export class BootScene extends Phaser.Scene {
   /** Создаёт простые заглушки, чтобы игра запускалась без внешних ассетов. */
   private createPlaceholderTextures(): void {
     const g = this.make.graphics({ x: 0, y: 0 });
-    g.fillStyle(0xffffff, 1);
+
+    g.fillStyle(UI.onSurface, 1);
     g.fillCircle(32, 32, 32);
     g.generateTexture('circle', 64, 64);
     g.destroy();

@@ -2,6 +2,8 @@ import Phaser from 'phaser';
 import { getLanguage } from '../i18n';
 import { summerAssets } from '../seasons/summer';
 import { assetUrl } from '../assets';
+import { MUSIC_KEY } from '../audio';
+import { UI } from '../palette';
 
 /**
  * PreloadScene — загрузка ассетов с индикатором прогресса.
@@ -50,6 +52,7 @@ export class PreloadScene extends Phaser.Scene {
     }
     // UI -> assets/images/ui/
     this.load.image('lock', assetUrl('assets/images/ui/lock.png'));
+    this.load.image('arrow-back', assetUrl('assets/images/ui/arrow-back.png'));
     // this.load.image('button', 'assets/images/ui/button.png');
 
     // Иллюстрации уровней -> assets/images/levels/
@@ -71,7 +74,7 @@ export class PreloadScene extends Phaser.Scene {
 
     // === Аудио ===
     // Музыка -> assets/audio/music/
-    // this.load.audio('bgm', 'assets/audio/music/bgm.mp3');
+    this.load.audio(MUSIC_KEY, assetUrl('assets/audio/music/main_theme.mp3'));
 
     // Короткие звуки -> assets/audio/sfx/
     // this.load.audio('click', 'assets/audio/sfx/click.mp3');
@@ -97,13 +100,13 @@ export class PreloadScene extends Phaser.Scene {
     const y = height / 2;
 
     const border = this.add.graphics();
-    border.lineStyle(6, 0xffffff, 0.9);
+    border.lineStyle(6, UI.stroke, 0.9);
     border.strokeRoundedRect(x - boxW / 2, y - boxH / 2, boxW, boxH, boxH / 2);
 
     const bar = this.add.graphics();
     this.load.on('progress', (value: number) => {
       bar.clear();
-      bar.fillStyle(0xffffff, 0.9);
+      bar.fillStyle(UI.stroke, 0.9);
       const pad = 6;
       const w = (boxW - pad * 2) * value;
       bar.fillRoundedRect(

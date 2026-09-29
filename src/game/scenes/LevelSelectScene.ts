@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { COLORS, getMainFont } from '../theme';
+import { COLORS, getMainFont, withStroke } from '../theme';
+import { UI, UI_CSS } from '../palette';
 import { buildGrid, fontForCell, type GridCell } from '../layout';
 import { createButton } from '../ui/Button';
 import { Progress } from '../progress';
@@ -22,23 +23,27 @@ export class LevelSelectScene extends Phaser.Scene {
     const LEVEL_COUNT = season.levelCount;
 
     // Заголовок сезона.
-    this.add
-      .text(width / 2, 36, t(season.nameKey), {
-        fontFamily: getMainFont(getLanguage()),
-        fontSize: '60px',
-        color: '#ffffff',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5, 0);
+    withStroke(
+      this.add
+        .text(width / 2, 36, t(season.nameKey), {
+          fontFamily: getMainFont(getLanguage()),
+          fontSize: '60px',
+          color: UI_CSS.onSurface,
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5, 0),
+    );
 
     // Подзаголовок.
-    this.add
-      .text(width / 2, 104, t('levelSelect.title'), {
-        fontFamily: getMainFont(getLanguage()),
-        fontSize: '30px',
-        color: '#eaf6ff',
-      })
-      .setOrigin(0.5, 0);
+    withStroke(
+      this.add
+        .text(width / 2, 104, t('levelSelect.title'), {
+          fontFamily: getMainFont(getLanguage()),
+          fontSize: '30px',
+          color: UI_CSS.onSurfaceMuted,
+        })
+        .setOrigin(0.5, 0),
+    );
 
     // Кнопка «назад».
     createButton(this, 100, 60, {
@@ -46,6 +51,7 @@ export class LevelSelectScene extends Phaser.Scene {
       height: 72,
       color: COLORS.danger,
       label: t('common.back'),
+      icon: 'arrow-back',
       onClick: () => this.scene.start('MenuScene'),
     });
 
@@ -83,7 +89,7 @@ export class LevelSelectScene extends Phaser.Scene {
     const radius = size * 0.22;
 
     const bg = this.add.graphics();
-    const cardColor = unlocked ? color : 0x8a8a8a;
+    const cardColor = unlocked ? color : UI.disabled;
     bg.fillStyle(cardColor, unlocked ? 1 : 0.6);
     bg.fillRoundedRect(-size / 2, -size / 2, size, size, radius);
 
@@ -92,10 +98,11 @@ export class LevelSelectScene extends Phaser.Scene {
       .text(0, unlocked ? -size * 0.08 : 0, unlocked ? String(level) : '', {
         fontFamily: getMainFont(getLanguage()),
         fontSize: `${fontForCell({ ...cell, width: size, height: size }, 0.45)}px`,
-        color: '#ffffff',
+        color: UI_CSS.onSurface,
         fontStyle: 'bold',
       })
       .setOrigin(0.5);
+    withStroke(num);
 
     const children: Phaser.GameObjects.GameObject[] = [bg, num];
 
@@ -115,9 +122,10 @@ export class LevelSelectScene extends Phaser.Scene {
         .text(0, size * 0.25, '★'.repeat(stars) + '☆'.repeat(3 - stars), {
           fontFamily: getMainFont(getLanguage()),
           fontSize: `${size * 0.16}px`,
-          color: '#ffe066',
+          color: UI_CSS.reward,
         })
         .setOrigin(0.5);
+      withStroke(starText);
       children.push(starText);
     }
 
@@ -154,5 +162,3 @@ export class LevelSelectScene extends Phaser.Scene {
     }
   }
 }
-
-

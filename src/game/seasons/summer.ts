@@ -1,4 +1,5 @@
 import type { Season, LevelConfig, Category, Basket, FallingItem, AssetRef } from './types';
+import { SEASON_COLORS, SEASON_BG_COLORS } from '../palette';
 
 /**
  * Сезон «Лето».
@@ -9,8 +10,10 @@ import type { Season, LevelConfig, Category, Basket, FallingItem, AssetRef } fro
  *
  * Уровни 6–10: заготовка (будет наполнена позже).
  *
- * Картинки пока не подключены — указывайте их через image.path / background.path
- * и регистрируйте текстуры в PreloadScene. Пока рисуются цветные заглушки.
+ * Картинки падающих объектов (ракушек) подключены через image.path и
+ * загружаются в PreloadScene из summerAssets.
+ *
+ * Цвета берутся из палитры (palette.ts), а не задаются hex-литералами.
  */
 
 /** Категории лета: песок и вода. */
@@ -18,23 +21,41 @@ const CAT_SAND = 'sand';
 const CAT_WATER = 'water';
 
 const summerCategories: Category[] = [
-  { id: CAT_SAND, color: 0xffd93d, labelKey: 'season.summer.cat.sand' },
-  { id: CAT_WATER, color: 0x3d7ad9, labelKey: 'season.summer.cat.water' },
+  { id: CAT_SAND, color: SEASON_COLORS.summer.sand, labelKey: 'season.summer.cat.sand' },
+  { id: CAT_WATER, color: SEASON_COLORS.summer.water, labelKey: 'season.summer.cat.water' },
 ];
+
+/** Картинка корзины-приёмника (общая для обеих категорий). */
+const basketImage = {
+  key: 'basket',
+  path: 'assets/images/levels/basket.png',
+};
+
+/** Картинки падающих объектов: жёлтая (песок) и синяя (вода) ракушки. */
+const clamSandImage = {
+  key: 'clam1',
+  path: 'assets/images/levels/clam1.png',
+};
+const clamWaterImage = {
+  key: 'clam2',
+  path: 'assets/images/levels/clam2.png',
+};
 
 /** Две корзины: жёлтая (песок) и синяя (вода). */
 const summerBaskets: Basket[] = [
   {
     categoryId: CAT_SAND,
-    color: 0xffd93d,
+    color: SEASON_COLORS.summer.sand,
     labelKey: 'season.summer.cat.sand',
-    // image: { path: 'assets/images/summer/basket-sand.png' },
+    image: { ...basketImage },
+    labelImage: { ...clamSandImage },
   },
   {
     categoryId: CAT_WATER,
-    color: 0x3d7ad9,
+    color: SEASON_COLORS.summer.water,
     labelKey: 'season.summer.cat.water',
-    // image: { path: 'assets/images/summer/basket-water.png' },
+    image: { ...basketImage },
+    labelImage: { ...clamWaterImage },
   },
 ];
 
@@ -42,19 +63,19 @@ const summerBaskets: Basket[] = [
 const summerItemDefs: FallingItem[] = [
   {
     categoryId: CAT_SAND,
-    color: 0xffd93d,
-    // image: { path: 'assets/images/summer/shell-yellow.png' },
+    color: SEASON_COLORS.summer.sand,
+    image: { ...clamSandImage },
   },
   {
     categoryId: CAT_WATER,
-    color: 0x3d7ad9,
-    // image: { path: 'assets/images/summer/star-blue.png' },
+    color: SEASON_COLORS.summer.water,
+    image: { ...clamWaterImage },
   },
 ];
 
 /** Фон пляжа/моря. */
 const beachBackground = {
-  color: 0x4fc3f7, // небесно-голубой (фолбэк, пока картинка не загружена)
+  color: SEASON_BG_COLORS.summer, // фолбэк, пока картинка не загружена
   key: 'summer_bg',
   path: 'assets/images/backgrounds/summer_background.jpg',
 };
@@ -72,6 +93,9 @@ const beachClouds = {
 export const summerAssets: AssetRef[] = [
   { key: beachBackground.key, path: beachBackground.path },
   { key: beachClouds.key, path: beachClouds.path },
+  { key: basketImage.key, path: basketImage.path },
+  { key: clamSandImage.key, path: clamSandImage.path },
+  { key: clamWaterImage.key, path: clamWaterImage.path },
 ];
 
 /** Базовый уровень лета с прогрессией сложности. */
@@ -80,9 +104,11 @@ function makeSummerLevel(
   overrides: Partial<LevelConfig> = {},
 ): LevelConfig {
   // Прогрессия: чем выше уровень, тем больше целей, чаще и быстрее падают.
+  // Скорость намеренно небольшая, чтобы у детей было время среагировать;
+  // она мягко растёт с уровнем — это и есть прогрессивная сложность.
   const target = 6 + number; // ур.1 -> 7, ур.5 -> 11
   const interval = Math.max(1200 - number * 90, 600);
-  const speed = 90 + number * 18;
+  const speed = 55 + number * 11; // ур.1 -> 66, ур.10 -> 165
 
   return {
     number,

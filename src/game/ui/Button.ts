@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { getMainFont } from '../theme';
+import { getMainFont, withStroke } from '../theme';
+import { UI, UI_CSS } from '../palette';
 import { getLanguage } from '../i18n';
 
 export interface ButtonOptions {
@@ -11,6 +12,11 @@ export interface ButtonOptions {
   color: number;
   /** Текст на кнопке. */
   label: string;
+  /**
+   * Ключ текстуры-иконки. Если задан и текстура загружена — вместо текста
+   * рисуется картинка по центру кнопки (например, стрелка «назад»).
+   */
+  icon?: string;
   /** Размер шрифта (по умолчанию — от высоты кнопки). */
   fontSize?: number;
   /** Колбэк по нажатию. */
@@ -34,7 +40,7 @@ export function createButton(
   bg.fillStyle(color, 1);
   bg.fillRoundedRect(-w / 2, -h / 2, w, h, Math.min(h / 2, w / 2));
   // Лёгкая «тень» снизу для объёма.
-  bg.fillStyle(0x000000, 0.15);
+  bg.fillStyle(UI.shadow, 0.15);
   bg.fillRoundedRect(-w / 2, h / 2 - h * 0.18, w, h * 0.18, {
     tl: 0,
     tr: 0,
@@ -42,16 +48,27 @@ export function createButton(
     br: Math.min(h / 2, w / 2),
   });
 
-  const text = scene.add
-    .text(0, 0, label, {
-      fontFamily: getMainFont(getLanguage()),
-      fontSize: `${fontSize}px`,
-      color: '#ffffff',
-      fontStyle: 'bold',
-    })
-    .setOrigin(0.5);
+  // Иконка вместо текста: рисуем картинку по центру кнопки.
+  const useIcon = !!options.icon && scene.textures.exists(options.icon);
+  let content: Phaser.GameObjects.GameObject;
 
-  const container = scene.add.container(x, y, [bg, text]);
+  if (useIcon) {
+    content = scene.add
+      .image(0, 0, options.icon!)
+      .setDisplaySize(h * 0.55, h * 0.55);
+  } else {
+    content = scene.add
+      .text(0, 0, label, {
+        fontFamily: getMainFont(getLanguage()),
+        fontSize: `${fontSize}px`,
+        color: UI_CSS.onSurface,
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    withStroke(content as Phaser.GameObjects.Text);
+  }
+
+  const container = scene.add.container(x, y, [bg, content]);
   container.setSize(w, h);
   container.setInteractive(
     new Phaser.Geom.Rectangle(0, 0, w, h),
@@ -73,3 +90,7 @@ export function createButton(
 
   return container;
 }
+
+
+
+

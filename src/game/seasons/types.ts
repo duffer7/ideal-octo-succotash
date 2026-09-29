@@ -41,10 +41,14 @@ export interface Basket {
   color: number;
   /** Картинка корзины (опционально). */
   image?: AssetRef;
+  /**
+   * Картинка-метка на корзине (например, ракушка нужной категории).
+   * Если задана и загружена — показывается вместо текстовой подписи.
+   */
+  labelImage?: AssetRef;
   /** Ключ локализации названия корзины. */
   labelKey: TranslationKey;
 }
-
 /** Падающий объект. */
 export interface FallingItem {
   /** В какую категорию/корзину относится объект. */
@@ -94,5 +98,6 @@ export interface Season {
   /** Уровни сезона. */
   levels: LevelConfig[];
 }
+
 
 

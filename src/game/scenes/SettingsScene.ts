@@ -1,7 +1,14 @@
 import Phaser from 'phaser';
-import { COLORS, getMainFont } from '../theme';
+import { COLORS, getMainFont, withStroke } from '../theme';
+import { UI, UI_CSS } from '../palette';
 import { getSafeBounds } from '../safeArea';
 import { createButton } from '../ui/Button';
+import {
+  isMusicEnabled,
+  onMusicChange,
+  setMusicEnabled,
+  syncBackgroundMusic,
+} from '../audio';
 import {
   LANGUAGES,
   LANGUAGE_FLAGS,
@@ -15,15 +22,21 @@ import {
 
 /**
  * SettingsScene — настройки игры.
- * Пока содержит один пункт: выбор языка (русский / английский).
- * Выбор сохраняется в localStorage через модуль i18n.
+ * Содержит выбор языка (русский / английский) и включение фоновой музыки.
+ * Обе настройки сохраняются в localStorage (i18n и audio соответственно).
  */
 export class SettingsScene extends Phaser.Scene {
   private titleText!: Phaser.GameObjects.Text;
   private languageLabel!: Phaser.GameObjects.Text;
+  private musicLabel!: Phaser.GameObjects.Text;
   /** Кнопки выбора языка с их контейнерами (для подсветки активного). */
   private languageButtons: { lang: Language; container: Phaser.GameObjects.Container }[] = [];
+  /** Кнопка-переключатель музыки и связанные с ней объекты. */
+  private musicToggle!: Phaser.GameObjects.Container;
+  private musicToggleBg!: Phaser.GameObjects.Graphics;
+  private musicToggleLabel!: Phaser.GameObjects.Text;
   private unsubscribe?: () => void;
+  private unsubscribeMusic?: () => void;
 
   constructor() {
     super('SettingsScene');
@@ -38,6 +51,7 @@ export class SettingsScene extends Phaser.Scene {
       height: 72,
       color: COLORS.danger,
       label: t('common.back'),
+      icon: 'arrow-back',
       onClick: () => this.scene.start('MenuScene'),
     });
 
@@ -46,24 +60,26 @@ export class SettingsScene extends Phaser.Scene {
       .text(bounds.centerX, bounds.y + 20, t('settings.title'), {
         fontFamily: getMainFont(getLanguage()),
         fontSize: '64px',
-        color: '#ffffff',
+        color: UI_CSS.onSurface,
         fontStyle: 'bold',
       })
       .setOrigin(0.5, 0);
+    withStroke(this.titleText);
 
     // Подпись «Язык».
     this.languageLabel = this.add
-      .text(bounds.centerX, bounds.centerY - 120, t('settings.language'), {
+      .text(bounds.centerX, bounds.centerY - 210, t('settings.language'), {
         fontFamily: getMainFont(getLanguage()),
         fontSize: '40px',
-        color: '#ffffff',
+        color: UI_CSS.onSurface,
         fontStyle: 'bold',
       })
       .setOrigin(0.5);
+    withStroke(this.languageLabel);
 
     // Кнопки выбора языка — в ряд по центру.
-    const btnW = Math.min(bounds.width * 0.3, 380);
-    const btnH = Math.min(bounds.height * 0.35, 160);
+    const btnW = Math.min(bounds.width * 0.26, 320);
+    const btnH = Math.min(bounds.height * 0.28, 140);
     const gap = 40;
     const totalW = btnW * LANGUAGES.length + gap * (LANGUAGES.length - 1);
     const startX = bounds.centerX - totalW / 2 + btnW / 2;
@@ -72,7 +88,7 @@ export class SettingsScene extends Phaser.Scene {
     LANGUAGES.forEach((lang, i) => {
       const container = this.createLanguageButton(
         startX + i * (btnW + gap),
-        bounds.centerY + 20,
+        bounds.centerY - 90,
         btnW,
         btnH,
         lang,
@@ -82,15 +98,97 @@ export class SettingsScene extends Phaser.Scene {
 
     this.refreshLanguageButtons();
 
+    // Подпись «Музыка».
+    this.musicLabel = this.add
+      .text(bounds.centerX, bounds.centerY + 70, t('settings.music'), {
+        fontFamily: getMainFont(getLanguage()),
+        fontSize: '40px',
+        color: UI_CSS.onSurface,
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    withStroke(this.musicLabel);
+
+    // Переключатель музыки (кнопка с подписью Вкл/Выкл).
+    this.createMusicToggle(bounds.centerX, bounds.centerY + 180);
+
     // Обновляем тексты, если язык меняется (например, из другого места).
     this.unsubscribe = onLanguageChange(() => {
       this.refreshTexts();
       this.refreshLanguageButtons();
     });
 
+    // Реагируем на изменение настройки музыки (в т.ч. из других сцен).
+    this.unsubscribeMusic = onMusicChange(() => {
+      this.refreshMusicToggle();
+      syncBackgroundMusic(this);
+    });
+
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.unsubscribe?.();
+      this.unsubscribeMusic?.();
     });
+  }
+
+  /** Кнопка-переключатель фоновой музыки. */
+  private createMusicToggle(x: number, y: number): void {
+    const w = Math.min(this.scale.width * 0.3, 320);
+    const h = Math.min(this.scale.height * 0.22, 120);
+
+    this.musicToggleBg = this.add.graphics();
+
+    this.musicToggleLabel = this.add
+      .text(0, 0, '', {
+        fontFamily: getMainFont(getLanguage()),
+        fontSize: `${Math.min(h * 0.34, 48)}px`,
+        color: UI_CSS.onSurface,
+        fontStyle: 'bold',
+      })
+      .setOrigin(0.5);
+    withStroke(this.musicToggleLabel);
+
+    this.musicToggle = this.add.container(x, y, [
+      this.musicToggleBg,
+      this.musicToggleLabel,
+    ]);
+    this.musicToggle.setSize(w, h);
+    this.musicToggle.setData('w', w);
+    this.musicToggle.setData('h', h);
+    this.musicToggle.setInteractive(
+      new Phaser.Geom.Rectangle(0, 0, w, h),
+      Phaser.Geom.Rectangle.Contains,
+    );
+    this.musicToggle.input!.cursor = 'pointer';
+
+    this.musicToggle.on('pointerdown', () => {
+      this.tweens.add({
+        targets: this.musicToggle,
+        scale: 0.94,
+        duration: 80,
+        yoyo: true,
+        onComplete: () => setMusicEnabled(!isMusicEnabled()),
+      });
+    });
+
+    this.refreshMusicToggle();
+  }
+
+  /** Обновляет вид и подпись переключателя музыки. */
+  private refreshMusicToggle(): void {
+    const w = this.musicToggle.getData('w') as number;
+    const h = this.musicToggle.getData('h') as number;
+    const on = isMusicEnabled();
+    this.drawButtonBg(
+      this.musicToggleBg,
+      w,
+      h,
+      on ? COLORS.primary : COLORS.disabled,
+    );
+    this.musicToggleBg.setAlpha(on ? 1 : 0.7);
+    this.musicToggleLabel.setText(
+      `${on ? '♪ ' : ''}${t(on ? 'settings.music.on' : 'settings.music.off')}`,
+    );
+    this.musicToggleLabel.setFontFamily(getMainFont(getLanguage()));
   }
 
   /** Кнопка-карточка с флагом и названием языка. */
@@ -110,15 +208,17 @@ export class SettingsScene extends Phaser.Scene {
         fontSize: `${h * 0.34}px`,
       })
       .setOrigin(0.5);
+    withStroke(flag);
 
     const label = this.add
       .text(0, h * 0.24, LANGUAGE_LABELS[lang], {
         fontFamily: getMainFont(lang),
         fontSize: `${h * 0.2}px`,
-        color: '#ffffff',
+        color: UI_CSS.onSurface,
         fontStyle: 'bold',
       })
       .setOrigin(0.5);
+    withStroke(label);
 
     const container = this.add.container(x, y, [bg, flag, label]);
     container.setSize(w, h);
@@ -155,7 +255,7 @@ export class SettingsScene extends Phaser.Scene {
     g.clear();
     g.fillStyle(color, 1);
     g.fillRoundedRect(-w / 2, -h / 2, w, h, Math.min(h / 3, w / 3));
-    g.fillStyle(0x000000, 0.15);
+    g.fillStyle(UI.shadow, 0.15);
     g.fillRoundedRect(-w / 2, h / 2 - h * 0.14, w, h * 0.14, {
       tl: 0,
       tr: 0,
@@ -184,6 +284,11 @@ export class SettingsScene extends Phaser.Scene {
     this.titleText.setFontFamily(font);
     this.languageLabel.setText(t('settings.language'));
     this.languageLabel.setFontFamily(font);
+    this.musicLabel.setText(t('settings.music'));
+    this.musicLabel.setFontFamily(font);
+
+    // Подпись/вид переключателя музыки зависит от языка и текущего состояния.
+    this.refreshMusicToggle();
 
     // Метки на кнопках языков используют шрифт своего языка.
     for (const { lang, container } of this.languageButtons) {

@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
-import { COLORS, getMainFont } from '../theme';
+import { COLORS, getMainFont, withStroke } from '../theme';
+import { UI, UI_CSS, PALETTE } from '../palette';
 import { getSafeBounds } from '../safeArea';
 import { createButton } from '../ui/Button';
 import { Progress } from '../progress';
@@ -39,9 +40,21 @@ export class GameScene extends Phaser.Scene {
   private scoreText!: Phaser.GameObjects.Text;
 
   private items: FallingObject[] = [];
-  private baskets = new Map<string, { x: number; y: number; radius: number }>();
+  private baskets = new Map<
+    string,
+    {
+      x: number;
+      y: number;
+      radius: number;
+      container: Phaser.GameObjects.Container;
+      /** Рамка-подсветка, показывается при наведении перетаскиваемой ракушки. */
+      highlight: Phaser.GameObjects.Graphics;
+    }
+  >();
   private spawnTimer?: Phaser.Time.TimerEvent;
   private bounds!: Phaser.Geom.Rectangle;
+  /** Категория корзины, подсвеченной сейчас (null — ничего не подсвечено). */
+  private highlightedCategory: string | null = null;
 
   constructor() {
     super('GameScene');
@@ -58,6 +71,7 @@ export class GameScene extends Phaser.Scene {
     this.mistakes = 0;
     this.items = [];
     this.baskets.clear();
+    this.highlightedCategory = null;
 
     this.createBackground();
     this.createBackButton();
@@ -149,6 +163,7 @@ export class GameScene extends Phaser.Scene {
       height: 72,
       color: COLORS.danger,
       label: t('common.back'),
+      icon: 'arrow-back',
       onClick: () => this.scene.start('LevelSelectScene'),
     });
   }
@@ -157,24 +172,30 @@ export class GameScene extends Phaser.Scene {
     const season = getSeason(ACTIVE_SEASON);
     const centerX = this.bounds.centerX;
 
-    this.add
-      .text(centerX, this.bounds.y, t('game.level', { n: this.level }), {
-        fontFamily: getMainFont(getLanguage()),
-        fontSize: '44px',
-        color: '#ffffff',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5, 0)
-      .setDepth(20);
+    withStroke(
+      this.add
+        .text(centerX, this.bounds.y, t('game.level', { n: this.level }), {
+          fontFamily: getMainFont(getLanguage()),
+          fontSize: '44px',
 
-    this.add
-      .text(centerX, this.bounds.y + 50, t(season.nameKey), {
-        fontFamily: getMainFont(getLanguage()),
-        fontSize: '28px',
-        color: '#eaf6ff',
-      })
-      .setOrigin(0.5, 0)
-      .setDepth(20);
+          color: UI_CSS.onSurface,
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5, 0)
+        .setDepth(20),
+    );
+
+    withStroke(
+      this.add
+        .text(centerX, this.bounds.y + 50, t(season.nameKey), {
+          fontFamily: getMainFont(getLanguage()),
+          fontSize: '28px',
+
+          color: UI_CSS.onSurfaceMuted,
+        })
+        .setOrigin(0.5, 0)
+        .setDepth(20),
+    );
 
     this.scoreText = this.add
       .text(
@@ -184,26 +205,32 @@ export class GameScene extends Phaser.Scene {
         {
           fontFamily: getMainFont(getLanguage()),
           fontSize: '44px',
-          color: '#ffffff',
+          color: UI_CSS.onSurface,
           fontStyle: 'bold',
         },
       )
       .setOrigin(1, 0)
       .setDepth(20);
+    withStroke(this.scoreText);
   }
 
   /** Две корзины-приёмника внизу экрана. */
   private createBaskets(): void {
     const { baskets } = this.config;
-    const gap = 60;
-    const basketSize = Math.min(this.bounds.height * 0.32, 220);
-    const totalW = basketSize * baskets.length + gap * (baskets.length - 1);
-    const startX = this.bounds.centerX - totalW / 2 + basketSize / 2;
-    const y = this.bounds.bottom - basketSize * 0.55;
+    const basketSize = Math.min(this.bounds.height * 0.7, 400);
+    // Разносим корзины к краям экрана (по n% от ширины от центра).
+    const spread = this.bounds.width * 0.2;
+    const y = this.bounds.bottom - basketSize * 0.4;
+    // Наклон к центральной оси: чем дальше от центра, тем сильнее поворот.
+    const tilt = -10;
 
     baskets.forEach((basket, i) => {
-      const x = startX + i * (basketSize + gap);
-      this.createBasket(x, y, basketSize, basket);
+      // Раскладываем симметрично относительно центра.
+      const dir = i === 0 ? -1 : 1;
+      const x = this.bounds.centerX + dir * spread;
+      // Наклоняем корзины «навстречу» центру.
+      const rotation = Phaser.Math.DegToRad(dir * tilt);
+      this.createBasket(x, y, basketSize, basket, rotation);
     });
   }
 
@@ -212,8 +239,25 @@ export class GameScene extends Phaser.Scene {
     y: number,
     size: number,
     basket: LevelConfig['baskets'][number],
+    rotation = 0,
   ): void {
     const children: Phaser.GameObjects.GameObject[] = [];
+
+    // Рамка-подсветка (скрыта по умолчанию): показывается, когда к корзине
+    // тащат подходящую ракушку — чтобы было понятно, что можно отпускать.
+    const highlight = this.add.graphics();
+    const hlInset = size * 0.04;
+    highlight.lineStyle(Math.max(6, size * 0.05), UI.secondary, 1);
+    highlight.strokeRoundedRect(
+      -size / 2 - hlInset,
+      -size / 2 - hlInset,
+      size + hlInset * 2,
+      size + hlInset * 2,
+      size * 0.2,
+    );
+    highlight.setAlpha(0);
+    highlight.setVisible(false);
+    children.push(highlight);
 
     if (basket.image?.key && this.textures.exists(basket.image.key)) {
       const img = this.add.image(0, 0, basket.image.key);
@@ -224,28 +268,102 @@ export class GameScene extends Phaser.Scene {
       const g = this.add.graphics();
       g.fillStyle(basket.color, 1);
       g.fillRoundedRect(-size / 2, -size / 2, size, size, size * 0.16);
-      g.lineStyle(6, 0xffffff, 0.9);
+
+      g.lineStyle(6, UI.stroke, 0.9);
       g.strokeRoundedRect(-size / 2, -size / 2, size, size, size * 0.16);
       children.push(g);
     }
 
-    // Подпись корзины (Песок / Вода).
-    const label = this.add
-      .text(0, size * 0.34, t(basket.labelKey), {
-        fontFamily: getMainFont(getLanguage()),
-        fontSize: `${size * 0.16}px`,
-        color: '#ffffff',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5);
+    // Метка корзины: картинка-ракушка нужной категории, а если её нет —
+    // текстовая подпись (Песок / Вода). Метку держим внутри границ корзины.
+    let label: Phaser.GameObjects.Container | Phaser.GameObjects.Text;
+    let labelRotation = 0;
+    const labelSize = size * 0.42;
+
+    if (basket.labelImage?.key && this.textures.exists(basket.labelImage.key)) {
+      // Ракушку на корзине рисуем с обводкой как у текста/иконок,
+      // но вдвое тоньше (относительно прежнего варианта).
+      label = this.makeOutlinedImage(
+        basket.labelImage.key,
+        labelSize,
+        PALETTE.deepPurple,
+        Math.max(0.75, labelSize * 0.01),
+      );
+      // Центрируем метку внутри корзины, чтобы она не выходила за края.
+      label.setPosition(0, 0);
+      // Разворачиваем метку обратно, чтобы ракушка смотрела ровно.
+      labelRotation = -rotation;
+    } else {
+      label = this.add
+        .text(0, 0, t(basket.labelKey), {
+          fontFamily: getMainFont(getLanguage()),
+          fontSize: `${size * 0.16}px`,
+          color: UI_CSS.onSurface,
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5);
+      withStroke(label);
+      labelRotation = -rotation;
+    }
     children.push(label);
 
-    this.add.container(x, y, children).setDepth(5);
+    const container = this.add.container(x, y, children).setDepth(5);
+    // Поворачиваем корзину к центру; метку разворачиваем обратно, чтобы
+    // она оставалась ровной и читаемой.
+    container.setRotation(rotation);
+    label.setRotation(labelRotation);
 
     this.baskets.set(basket.categoryId, {
       x,
       y,
       radius: size / 2,
+      container,
+      highlight,
+    });
+  }
+
+  /** Анимация корзины при верном попадании: радостный «подскок». */
+  private animateBasketCorrect(categoryId: string): void {
+    const basket = this.baskets.get(categoryId);
+    if (!basket) return;
+    const { container } = basket;
+    // Сохраняем исходные углы, чтобы вернуть корзину на место.
+    const baseRotation = container.rotation;
+    this.tweens.add({
+      targets: container,
+      scale: 1.15,
+      rotation: baseRotation - Phaser.Math.DegToRad(4),
+      duration: 120,
+      ease: 'Quad.out',
+      yoyo: true,
+      onComplete: () => {
+        container.setScale(1);
+        container.setRotation(baseRotation);
+      },
+    });
+  }
+
+  /** Анимация корзины при неверном попадании: «дрожь» + красная вспышка. */
+  private animateBasketWrong(categoryId: string): void {
+    const basket = this.baskets.get(categoryId);
+    if (!basket) return;
+    const { container } = basket;
+    const baseX = container.x;
+    const baseRotation = container.rotation;
+
+    // Быстрое покачивание влево-вправо вокруг исходной точки.
+    this.tweens.add({
+      targets: container,
+      x: baseX - 10,
+      rotation: baseRotation - Phaser.Math.DegToRad(6),
+      duration: 60,
+      ease: 'Sine.inOut',
+      yoyo: true,
+      repeat: 3,
+      onComplete: () => {
+        container.setX(baseX);
+        container.setRotation(baseRotation);
+      },
     });
   }
 
@@ -267,51 +385,171 @@ export class GameScene extends Phaser.Scene {
 
     this.input.setDraggable(container);
 
-    // Падение как tween; при достижении низа — промах.
-    const fallTargetY = this.bounds.bottom - 20;
-    const distance = fallTargetY - container.y;
-    const duration = (distance / this.config.fallSpeed) * 1000;
-
-    container.setData('fallTween', null);
-    const tween = this.tweens.add({
-      targets: container,
-      y: fallTargetY,
-      duration,
-      onComplete: () => this.onMissed(record),
-    });
-    container.setData('fallTween', tween);
+    // Навешиваем «живое» падение (гравитация + покачивание + лёгкий крен).
+    this.startFall(record);
 
     container.on(
       'drag',
       (_p: Phaser.Input.Pointer, dragX: number, dragY: number) => {
         if (record.done) return;
         // Останавливаем падение, пока объект тащат.
-        (container.getData('fallTween') as Phaser.Tweens.Tween | null)?.pause();
+        this.pauseFall(container);
+        // Сбрасываем крен: во время перетаскивания ракушка смотрит ровно.
+        container.setRotation(0);
         container.x = dragX;
         container.y = dragY;
+        // Подсвечиваем корзину, над которой сейчас находится ракушка.
+        this.updateBasketHighlight(record.categoryId, dragX, dragY);
       },
     );
 
-    container.on('dragend', () => this.onDrop(record));
+    container.on('dragend', () => {
+      this.clearBasketHighlight();
+      this.onDrop(record);
+    });
   }
 
-  /** Рисует визуал объекта (картинка или цветная заглушка). */
+  /**
+   * Запускает «живое» падение объекта от текущей позиции до низа экрана.
+   *
+   * Состоит из трёх наложенных tween:
+   *  - основной вертикальный с ускорением (`Sine.in`) — имитация гравитации;
+   *  - горизонтальное покачивание (плавный синус туда-обратно) — объект
+   *    «плывёт», а не падает по линейке;
+   *  - лёгкий крен (наклон влево-вправо), синхронный с покачиванием.
+   *
+   * Основной tween кладём в `fallTween`, остальные — в `fallAuxTweens`,
+   * чтобы их можно было разом поставить на паузу и снять при перетаскивании.
+   */
+  private startFall(record: FallingObject): void {
+    const { container } = record;
+    const fallTargetY = this.bounds.bottom - 20;
+    const distance = fallTargetY - container.y;
+    if (distance <= 0) {
+      this.onMissed(record);
+      return;
+    }
+
+    // Убираем возможные прошлые aux-tween перед запуском новых.
+    this.clearAuxTweens(container);
+
+    const duration = (distance / this.config.fallSpeed) * 1000;
+
+    // Основное падение: чуть ускоряется к низу (гравитация).
+    const tween = this.tweens.add({
+      targets: container,
+      y: fallTargetY,
+      duration,
+      ease: 'Sine.in',
+      onComplete: () => this.onMissed(record),
+    });
+    container.setData('fallTween', tween);
+
+    // Покачивание и крен масштабируем: у мелких падений размах меньше.
+    const swayAmp = Phaser.Math.Clamp(distance * 0.06, 10, 46);
+    const swayDuration = Phaser.Math.Clamp(duration * 0.35, 700, 1600);
+    const baseX = container.x;
+    const dir = Math.random() < 0.5 ? -1 : 1;
+
+    // Горизонтальное покачивание: плавный синус от базы, туда-обратно.
+    const sway = this.tweens.addCounter({
+      from: 0,
+      to: Math.PI * 2,
+      duration: swayDuration,
+      repeat: -1,
+      onUpdate: (tw) => {
+        const v = tw.getValue() ?? 0;
+        container.x = baseX + Math.sin(v) * swayAmp * dir;
+        // Лёгкий крен «по ветру», совпадающий с направлением движения.
+        container.setRotation(Math.cos(v) * Phaser.Math.DegToRad(6) * dir);
+      },
+    });
+
+    container.setData('fallAuxTweens', [sway]);
+  }
+
+  /** Ставит на паузу все tween падения объекта (основной + вспомогательные). */
+  private pauseFall(container: Phaser.GameObjects.Container): void {
+    (container.getData('fallTween') as Phaser.Tweens.Tween | null)?.pause();
+    const aux = container.getData('fallAuxTweens') as
+      | Phaser.Tweens.Tween[]
+      | undefined;
+    aux?.forEach((t) => t.pause());
+  }
+
+  /** Снимает вспомогательные tween падения (покачивание/крен). */
+  private clearAuxTweens(container: Phaser.GameObjects.Container): void {
+    const aux = container.getData('fallAuxTweens') as
+      | Phaser.Tweens.Tween[]
+      | undefined;
+    aux?.forEach((t) => t.remove());
+    container.setData('fallAuxTweens', []);
+  }
+
+  /** Полностью останавливает и убирает анимацию падения объекта. */
+  private stopFall(container: Phaser.GameObjects.Container): void {
+    (container.getData('fallTween') as Phaser.Tweens.Tween | null)?.remove();
+    container.setData('fallTween', null);
+    this.clearAuxTweens(container);
+  }
+
+  /**
+   * Картинка с обводкой по контуру PNG.
+   *
+   * Непрозрачную форму обводят несколько копий картинки, тинтованных в цвет
+   * контура и слегка смещённых по кругу, а сверху кладётся сама картинка.
+   * Работает и в WebGL, и в Canvas (в отличие от FX-контуров).
+   */
+  private makeOutlinedImage(
+    key: string,
+    size: number,
+    outlineColor: number,
+    thickness: number,
+  ): Phaser.GameObjects.Container {
+    const children: Phaser.GameObjects.GameObject[] = [];
+
+    // Копии-контур, равномерно разнесённые по кругу.
+    const steps = 12;
+    for (let i = 0; i < steps; i++) {
+      const angle = (i / steps) * Math.PI * 2;
+      const dx = Math.cos(angle) * thickness;
+      const dy = Math.sin(angle) * thickness;
+      const shadow = this.add.image(dx, dy, key).setDisplaySize(size, size);
+      shadow.setTint(outlineColor);
+      children.push(shadow);
+    }
+
+    // Сама картинка поверх контура.
+    const main = this.add.image(0, 0, key).setDisplaySize(size, size);
+    children.push(main);
+
+    return this.add.container(0, 0, children);
+  }
+
+  /** Рисует визуал объекта (картинка с обводкой или цветная заглушка). */
   private createItemVisual(
     x: number,
     y: number,
     def: FallingItem,
   ): Phaser.GameObjects.Container {
-    const size = Math.min(this.bounds.height * 0.16, 110);
+    // Ракушки делаем заметно крупнее — так их проще хватать детям.
+    const size = Math.min(this.bounds.height * 0.2, 150);
     let visual: Phaser.GameObjects.GameObject;
 
     if (def.image?.key && this.textures.exists(def.image.key)) {
-      const img = this.add.image(0, 0, def.image.key);
-      img.setDisplaySize(size, size);
-      visual = img;
+      // Обводка по контуру ракушки — того же цвета, что у текста/иконок,
+      // но вдвое тоньше: спрайт крупный, жирный контур выглядел грубо.
+      visual = this.makeOutlinedImage(
+        def.image.key,
+        size,
+        PALETTE.deepPurple,
+        Math.max(2, size * 0.0175),
+      );
     } else {
       // Заглушка: круг с контуром в цвете категории.
       const c = this.add.circle(0, 0, size / 2, def.color);
-      c.setStrokeStyle(6, 0xffffff, 0.85);
+
+      c.setStrokeStyle(6, UI.stroke, 0.85);
       visual = c;
     }
 
@@ -355,12 +593,105 @@ export class GameScene extends Phaser.Scene {
     if (match) return match;
 
     const cat = this.config.categories.find((c) => c.id === chosen);
-    return { categoryId: chosen, color: cat?.color ?? 0xffffff };
+    return { categoryId: chosen, color: cat?.color ?? UI.onSurface };
   }
 
   // ---------------------------------------------------------------------------
   // Обработка перетаскивания
   // ---------------------------------------------------------------------------
+
+  /**
+   * Подсвечивает корзину под перетаскиваемой ракушкой.
+   *
+   * Подсказка показывается всегда, когда ракушка нависает над любой корзиной,
+   * но цвет и лёгкий «подскок» зависят от совпадения категории: правильная
+   * корзина светится зелёным и подрастает («можно отпускать»), неправильная —
+   * приглушённым цветом.
+   */
+  private updateBasketHighlight(
+    itemCategoryId: string,
+    x: number,
+    y: number,
+  ): void {
+    let target: string | null = null;
+    for (const [categoryId, basket] of this.baskets) {
+      const dist = Phaser.Math.Distance.Between(x, y, basket.x, basket.y);
+      if (dist < basket.radius) {
+        target = categoryId;
+        break;
+      }
+    }
+
+    if (target === this.highlightedCategory) return;
+
+    // Снимаем подсветку со старой корзины.
+    if (this.highlightedCategory) {
+      this.setBasketHighlight(this.highlightedCategory, false, false);
+    }
+    // Включаем на новой (если попали в какую-то корзину).
+    if (target) {
+      const isCorrect = target === itemCategoryId;
+      this.setBasketHighlight(target, true, isCorrect);
+    }
+    this.highlightedCategory = target;
+  }
+
+  /** Полностью убирает подсветку со всех корзин. */
+  private clearBasketHighlight(): void {
+    if (!this.highlightedCategory) return;
+    const basket = this.baskets.get(this.highlightedCategory);
+    if (basket) {
+      // Убираем рамку и возвращаем корзину к обычному размеру без анимации,
+      // чтобы не мешать «подскоку» при попадании.
+      basket.highlight.setVisible(false);
+      basket.highlight.setAlpha(0);
+      basket.container.setScale(1);
+    }
+    this.highlightedCategory = null;
+  }
+
+  /**
+   * Включает/выключает подсветку конкретной корзины.
+   * `correct` — совпадает ли категория ракушки с корзиной (правильная цель).
+   */
+  private setBasketHighlight(
+    categoryId: string,
+    on: boolean,
+    correct: boolean,
+  ): void {
+    const basket = this.baskets.get(categoryId);
+    if (!basket) return;
+    const { highlight } = basket;
+
+    // Правильную цель светим зелёным, неправильную — красноватым.
+    highlight.clear();
+    const size = basket.radius * 2;
+    const hlInset = size * 0.04;
+    highlight.lineStyle(
+      Math.max(6, size * 0.05),
+      correct ? UI.secondary : UI.reward,
+      1,
+    );
+    highlight.strokeRoundedRect(
+      -size / 2 - hlInset,
+      -size / 2 - hlInset,
+      size + hlInset * 2,
+      size + hlInset * 2,
+      size * 0.2,
+    );
+
+    highlight.setVisible(on);
+    highlight.setAlpha(on ? 1 : 0);
+
+    // Лёгкий «подскок» правильной корзины, чтобы притягивала взгляд.
+    const { container } = basket;
+    this.tweens.add({
+      targets: container,
+      scale: on && correct ? 1.1 : 1,
+      duration: 130,
+      ease: 'Quad.out',
+    });
+  }
 
   private onDrop(record: FallingObject): void {
     if (record.done) return;
@@ -388,42 +719,32 @@ export class GameScene extends Phaser.Scene {
     }
 
     if (hitCategory === record.categoryId) {
-      this.onCorrect(record);
+      this.onCorrect(record, hitCategory);
     } else {
-      this.onWrong(record);
+      this.onWrong(record, hitCategory);
     }
   }
 
   /** Продолжает падение объекта с текущей высоты. */
   private resumeFall(record: FallingObject): void {
-    const { container } = record;
-    const tween = container.getData('fallTween') as Phaser.Tweens.Tween | null;
-    if (tween) {
-      // Пересоздаём tween от текущей позиции до низа.
-      tween.remove();
-      const fallTargetY = this.bounds.bottom - 20;
-      const distance = fallTargetY - container.y;
-      if (distance <= 0) {
-        this.onMissed(record);
-        return;
-      }
-      const duration = (distance / this.config.fallSpeed) * 1000;
-      const newTween = this.tweens.add({
-        targets: container,
-        y: fallTargetY,
-        duration,
-        onComplete: () => this.onMissed(record),
-      });
-      container.setData('fallTween', newTween);
-    }
+    // Пересоздаём анимацию падения от текущей позиции.
+    this.stopFall(record.container);
+    this.startFall(record);
   }
 
-  private onCorrect(record: FallingObject): void {
+  private onCorrect(record: FallingObject, basketCategoryId: string): void {
     record.done = true;
     this.input.setDraggable(record.container, false);
     record.container.disableInteractive();
 
-    (record.container.getData('fallTween') as Phaser.Tweens.Tween | null)?.remove();
+    // Останавливаем всё падение (основной tween + покачивание/крен).
+    this.stopFall(record.container);
+
+    // Корзина радостно «подпрыгивает» при верном попадании.
+    this.animateBasketCorrect(basketCategoryId);
+
+    // Сама ракушка «вспыхивает» и уменьшается, улетая в корзину.
+    this.animateItemCorrect(record.container);
 
     this.sorted += 1;
     this.updateHud();
@@ -433,6 +754,7 @@ export class GameScene extends Phaser.Scene {
       scale: 0.2,
       alpha: 0,
       duration: 220,
+      delay: 140,
       onComplete: () => record.container.destroy(),
     });
 
@@ -441,15 +763,54 @@ export class GameScene extends Phaser.Scene {
     }
   }
 
-  private onWrong(record: FallingObject): void {
+  /**
+   * Анимация-выделение ракушки при верном попадании: короткая вспышка-подсветка
+   * (золотой пульс картинки) и лёгкий поворот — помимо уменьшения корзины.
+   */
+  private animateItemCorrect(container: Phaser.GameObjects.Container): void {
+    // Собираем все картинки внутри (учёт вложенной обводки-контейнера).
+    const images: Phaser.GameObjects.Image[] = [];
+    const collect = (obj: Phaser.GameObjects.GameObject): void => {
+      if (obj instanceof Phaser.GameObjects.Image) {
+        images.push(obj);
+      } else if (obj instanceof Phaser.GameObjects.Container) {
+        obj.list.forEach(collect);
+      }
+    };
+    container.list.forEach(collect);
+
+    // Подсвечиваем ракушку золотой заливкой — отмечаем правильный выбор.
+    images.forEach((img) => img.setTintFill(UI.reward));
+
+    // Лёгкое «покачивание» радости (масштаб не трогаем — им управляет
+    // исчезновение объекта).
+    this.tweens.add({
+      targets: container,
+      angle: { from: -14, to: 14 },
+      duration: 90,
+      ease: 'Sine.inOut',
+      yoyo: true,
+      repeat: 1,
+    });
+
+    // Гасим вспышку обратно к исходному виду перед исчезновением.
+    this.time.delayedCall(140, () => {
+      images.forEach((img) => img.clearTint());
+    });
+  }
+
+  private onWrong(record: FallingObject, basketCategoryId: string): void {
     this.mistakes += 1;
     this.updateHud();
+
+    // Корзина «отряхивается» при неверном попадании.
+    this.animateBasketWrong(basketCategoryId);
 
     this.cameras.main.flash(200, 255, 80, 80);
 
     // Возвращаем объект наверх и продолжаем падение.
     const { container } = record;
-    (container.getData('fallTween') as Phaser.Tweens.Tween | null)?.remove();
+    this.stopFall(container);
     const startY = this.bounds.y + 40;
     this.tweens.add({
       targets: container,
@@ -491,44 +852,198 @@ export class GameScene extends Phaser.Scene {
     const stars = this.mistakes === 0 ? 3 : this.mistakes <= 2 ? 2 : 1;
     Progress.setResult(this.level, stars, ACTIVE_SEASON);
 
+    this.showVictoryPanel(stars);
+  }
+
+  /**
+   * Панель победы: затемнение экрана, «дышащее» свечение, анимированные звёзды
+   * и кнопка перехода. Появляется каскадом снизу вверх для живости.
+   */
+  private showVictoryPanel(stars: number): void {
     const { centerX, centerY } = this.bounds;
+    const panelW = Math.min(this.bounds.width * 0.86, 680);
+    const panelH = Math.min(this.bounds.height * 0.72, 560);
+    const radius = panelH * 0.09;
+    const depth = 30;
 
-    this.add
-      .rectangle(centerX, centerY, 560, 260, 0x000000, 0.6)
-      .setStrokeStyle(4, 0xffffff, 0.8)
-      .setDepth(30);
+    // 1. Затемняем игровое поле, чтобы фокус был на результате.
+    const dim = this.add
+      .rectangle(centerX, centerY, this.scale.width, this.scale.height, UI.overlay, 0.55)
+      .setDepth(depth)
+      .setAlpha(0);
+    this.tweens.add({ targets: dim, alpha: 1, duration: 220 });
 
-    this.add
-      .text(centerX, centerY - 60, t('game.wellDone'), {
-        fontFamily: getMainFont(getLanguage()),
-        fontSize: '56px',
-        color: '#ffe066',
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5)
-      .setDepth(31);
+    // 2. Панель с закруглёнными углами, рамкой и мягкой тенью.
+    const panel = this.add.graphics().setDepth(depth + 1);
+    panel.fillStyle(UI.shadow, 0.18);
+    panel.fillRoundedRect(
+      -panelW / 2,
+      -panelH / 2 + 10,
+      panelW,
+      panelH,
+      radius,
+    );
+    panel.fillStyle(UI.primary, 1);
+    panel.fillRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, radius);
+    panel.lineStyle(Math.max(6, panelW * 0.012), UI.stroke, 0.95);
+    panel.strokeRoundedRect(-panelW / 2, -panelH / 2, panelW, panelH, radius);
 
-    const starStr = '★'.repeat(stars) + '☆'.repeat(3 - stars);
-    this.add
-      .text(centerX, centerY + 10, starStr, {
-        fontFamily: getMainFont(getLanguage()),
-        fontSize: '56px',
-        color: '#ffe066',
-      })
-      .setOrigin(0.5)
-      .setDepth(31);
+    const panelContainer = this.add
+      .container(centerX, centerY, [panel])
+      .setDepth(depth + 1);
+    panelContainer.setScale(0.8);
+    panelContainer.setAlpha(0);
+    this.tweens.add({
+      targets: panelContainer,
+      scale: 1,
+      alpha: 1,
+      duration: 320,
+      ease: 'Back.out',
+    });
 
+    // 3. Заголовок «Молодец!».
+    const title = withStroke(
+      this.add
+        .text(centerX, centerY - panelH * 0.3, t('game.wellDone'), {
+          fontFamily: getMainFont(getLanguage()),
+          fontSize: `${Math.round(panelH * 0.14)}px`,
+          color: UI_CSS.onSurface,
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5)
+        .setDepth(depth + 2),
+    );
+    title.setAlpha(0);
+
+    // 4. Ряд звёзд под заголовком — рисуем векторно и анимируем каскадом.
+    const starSize = panelH * 0.2;
+    const gap = starSize * 1.12;
+    const starsY = centerY + panelH * 0.02;
+    this.createVictoryStars(
+      centerX,
+      starsY,
+      stars,
+      starSize,
+      gap,
+      depth + 2,
+    );
+
+    // 5. Кнопка перехода.
     const season = getSeason(ACTIVE_SEASON);
     const isLast = this.level >= season.levelCount;
     const nextLabel = isLast ? t('common.back') : t('game.next');
 
-    const next = createButton(this, centerX, centerY + 90, {
+    const next = createButton(this, centerX, centerY + panelH * 0.32, {
       width: 300,
-      height: 80,
+      height: 84,
       color: COLORS.secondary,
       label: nextLabel,
       onClick: () => this.scene.start('LevelSelectScene'),
     });
-    next.setDepth(31);
+    next.setDepth(depth + 2);
+    next.setAlpha(0);
+    next.setScale(0.8);
+
+    // Заголовок и кнопка «выезжают» после появления панели.
+    this.tweens.add({
+      targets: title,
+      alpha: 1,
+      duration: 260,
+      delay: 180,
+    });
+    this.tweens.add({
+      targets: next,
+      alpha: 1,
+      scale: 1,
+      duration: 320,
+      delay: 520,
+      ease: 'Back.out',
+    });
+  }
+
+  /**
+   * Рисует ряд звёзд результата (заполненные — заработанные, контурные —
+   * оставшиеся). Каждая звезда появляется каскадом с «подскоком», а
+   * заработанные мягко пульсируют — так акцент на достижении заметнее.
+   */
+  private createVictoryStars(
+    centerX: number,
+    centerY: number,
+    earned: number,
+    size: number,
+    gap: number,
+    depth: number,
+  ): void {
+    const count = 3;
+    const startX = centerX - gap * (count - 1) * 0.5;
+
+    for (let i = 0; i < count; i++) {
+      const filled = i < earned;
+      const star = this.createStarShape(size, filled)
+        .setPosition(startX + i * gap, centerY)
+        .setDepth(depth)
+        .setAlpha(0)
+        .setScale(0);
+
+      // Каскадное появление: слева направо, с «отскоком».
+      this.tweens.add({
+        targets: star,
+        alpha: 1,
+        scale: 1,
+        duration: 320,
+        delay: 260 + i * 160,
+        ease: 'Back.out',
+      });
+
+      // Заработанная звезда мягко «дышит» — знак успеха.
+      if (filled) {
+        this.tweens.add({
+          targets: star,
+          scale: 1.12,
+          duration: 700,
+          delay: 600 + i * 160,
+          ease: 'Sine.inOut',
+          yoyo: true,
+          repeat: -1,
+        });
+      }
+    }
+  }
+
+  /**
+   * Одна звезда как контейнер: пятиконечная форма с обводкой.
+   * Заработанная — золотая с бликом, оставшаяся — приглушённый контур.
+   */
+  private createStarShape(
+    size: number,
+    filled: boolean,
+  ): Phaser.GameObjects.Container {
+    const outer = size / 2;
+    const inner = outer * 0.45;
+    const points: Phaser.Types.Math.Vector2Like[] = [];
+    for (let i = 0; i < 10; i++) {
+      const r = i % 2 === 0 ? outer : inner;
+      // Верхний угол — вверх (−90°), дальше по кругу.
+      const angle = -Math.PI / 2 + (i * Math.PI) / 5;
+      points.push({ x: Math.cos(angle) * r, y: Math.sin(angle) * r });
+    }
+
+    const g = this.add.graphics();
+    const fillColor = filled ? UI.reward : UI.onSurface;
+    const fillAlpha = filled ? 1 : 0.15;
+
+    g.fillStyle(fillColor, fillAlpha);
+    g.beginPath();
+    g.moveTo(points[0].x!, points[0].y!);
+    for (let i = 1; i < points.length; i++) {
+      g.lineTo(points[i].x!, points[i].y!);
+    }
+    g.closePath();
+    g.fillPath();
+
+    g.lineStyle(Math.max(3, size * 0.06), UI.stroke, 0.95);
+    g.strokePath();
+
+    return this.add.container(0, 0, [g]);
   }
 }

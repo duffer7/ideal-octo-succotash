@@ -4,6 +4,7 @@
  * В нативном приложении ориентация заблокирована в ландшафт, поэтому оверлей не нужен.
  */
 import { t, onLanguageChange } from '../game/i18n';
+import { UI_CSS } from '../game/palette';
 
 export function registerOrientationOverlay(): void {
   const overlay = document.createElement('div');
@@ -18,8 +19,8 @@ export function registerOrientationOverlay(): void {
     'align-items:center',
     'justify-content:center',
     'gap:24px',
-    'background:#4a90d9',
-    'color:#fff',
+    `background:${UI_CSS.background}`,
+    `color:${UI_CSS.onSurface}`,
     'font-family:system-ui,-apple-system,sans-serif',
     'font-size:32px',
     'text-align:center',
@@ -51,5 +52,4 @@ export function registerOrientationOverlay(): void {
   window.addEventListener('resize', update);
   window.addEventListener('orientationchange', update);
 }
-
 

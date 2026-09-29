@@ -38,6 +38,9 @@ type Dictionary = {
 
   'settings.title': string;
   'settings.language': string;
+  'settings.music': string;
+  'settings.music.on': string;
+  'settings.music.off': string;
 
   'levelSelect.title': string;
   'levelSelect.season': string;
@@ -67,6 +70,9 @@ const DICTIONARIES: Record<Language, Dictionary> = {
 
     'settings.title': 'Настройки',
     'settings.language': 'Язык',
+    'settings.music': 'Музыка',
+    'settings.music.on': 'Вкл',
+    'settings.music.off': 'Выкл',
 
     'levelSelect.title': 'Выбери уровень',
     'levelSelect.season': 'Лето',
@@ -76,7 +82,7 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'season.summer.cat.water': 'Вода',
 
     'game.level': 'Уровень {n}',
-    'game.wellDone': 'Молодец! ★★★',
+    'game.wellDone': 'Молодец!',
     'game.next': 'Дальше',
     'game.wrong': 'Ой! Попробуй ещё',
 
@@ -94,6 +100,9 @@ const DICTIONARIES: Record<Language, Dictionary> = {
 
     'settings.title': 'Settings',
     'settings.language': 'Language',
+    'settings.music': 'Music',
+    'settings.music.on': 'On',
+    'settings.music.off': 'Off',
 
     'levelSelect.title': 'Choose a level',
     'levelSelect.season': 'Summer',
@@ -103,7 +112,7 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'season.summer.cat.water': 'Water',
 
     'game.level': 'Level {n}',
-    'game.wellDone': 'Well done! ★★★',
+    'game.wellDone': 'Well done!',
     'game.next': 'Next',
     'game.wrong': 'Oops! Try again',
 

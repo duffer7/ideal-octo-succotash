@@ -4,6 +4,7 @@ import { initCapacitor } from './native/capacitor';
 import { registerOrientationOverlay } from './ui/orientationOverlay';
 import { t } from './game/i18n';
 import { ensureFontsLoaded } from './game/fonts';
+import { UI_CSS } from './game/palette';
 
 /**
  * Инициализация приложения.
@@ -24,7 +25,8 @@ bootstrap().catch((err) => {
   console.error('Ошибка запуска:', err);
   const root = document.getElementById('game');
   if (root) {
-    root.innerHTML = `<p style="color:#fff;padding:24px;font-size:18px">${t('error.start')}</p>`;
+    root.innerHTML = `<p style="color:${UI_CSS.onSurface};padding:24px;font-size:18px">${t('error.start')}</p>`;
   }
 });
+
 

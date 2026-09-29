@@ -1,8 +1,10 @@
 import Phaser from 'phaser';
-import { COLORS, getMainFont } from '../theme';
+import { COLORS, getMainFont, withStroke } from '../theme';
+import { UI_CSS } from '../palette';
 import { createButton } from '../ui/Button';
 import { getSafeBounds } from '../safeArea';
 import { t, onLanguageChange, getLanguage } from '../i18n';
+import { playBackgroundMusic, syncBackgroundMusic } from '../audio';
 
 /**
  * MenuScene — главное меню с крупными кнопками для детей.
@@ -25,12 +27,20 @@ export class MenuScene extends Phaser.Scene {
       .text(bounds.centerX, bounds.y + 40, t('menu.title'), {
         fontFamily: getMainFont(getLanguage()),
         fontSize: '84px',
-        color: '#ffffff',
+        color: UI_CSS.onSurface,
         fontStyle: 'bold',
       })
       .setOrigin(0.5, 0);
+    withStroke(this.titleText);
 
     this.buildButtons(bounds);
+
+    // Фоновая музыка. Браузеры блокируют автоплей до первого касания —
+    // поэтому пробуем сразу и повторяем при первом взаимодействии.
+    syncBackgroundMusic(this);
+    this.input.once(Phaser.Input.Events.POINTER_DOWN, () => {
+      playBackgroundMusic(this);
+    });
 
     // Пересобираем кнопки при смене языка (чтобы обновились подписи).
     this.unsubscribe = onLanguageChange(() => {
@@ -69,3 +79,5 @@ export class MenuScene extends Phaser.Scene {
     });
   }
 }
+
+
