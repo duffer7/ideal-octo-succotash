@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { getMainFont, withStroke } from '../theme';
 import { UI, UI_CSS } from '../palette';
 import { getLanguage } from '../i18n';
+import { playClickSound } from '../audio';
 
 export interface ButtonOptions {
   /** Ширина контейнера. */
@@ -79,6 +80,7 @@ export function createButton(
   }
 
   container.on('pointerdown', () => {
+    playClickSound(scene);
     scene.tweens.add({
       targets: container,
       scale: 0.94,
@@ -90,7 +92,5 @@ export function createButton(
 
   return container;
 }
-
-
 
 

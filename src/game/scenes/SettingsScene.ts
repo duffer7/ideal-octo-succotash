@@ -6,6 +6,7 @@ import { createButton } from '../ui/Button';
 import {
   isMusicEnabled,
   onMusicChange,
+  playClickSound,
   setMusicEnabled,
   syncBackgroundMusic,
 } from '../audio';
@@ -161,6 +162,7 @@ export class SettingsScene extends Phaser.Scene {
     this.musicToggle.input!.cursor = 'pointer';
 
     this.musicToggle.on('pointerdown', () => {
+      playClickSound(this);
       this.tweens.add({
         targets: this.musicToggle,
         scale: 0.94,
@@ -234,6 +236,7 @@ export class SettingsScene extends Phaser.Scene {
     container.input!.cursor = 'pointer';
 
     container.on('pointerdown', () => {
+      playClickSound(this);
       this.tweens.add({
         targets: container,
         scale: 0.94,

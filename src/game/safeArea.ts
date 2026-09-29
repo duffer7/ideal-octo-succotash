@@ -45,16 +45,15 @@ function readCssInsets(): SafeAreaInsets {
 export function getSafeArea(scale: Phaser.Scale.ScaleManager): SafeAreaInsets {
   const css = readCssInsets();
 
-  // Масштаб отображения: сколько реальных (CSS) пикселей приходится
-  // на один логический пиксель игры. При центрировании по бокам могут
-  // быть «чёрные полосы» (letterbox), поэтому inset делим на displayScale.
-  const displayScale = scale.displayScale.x || scale.displayScale.y || 1;
-
+  // Масштаб отображения по каждой оси отдельно: при Scale.EXPAND игровое поле
+  // расширяется по «свободной» оси, поэтому коэффициенты X и Y могут отличаться.
+  const sx = scale.displayScale.x || 1;
+  const sy = scale.displayScale.y || 1;
   return {
-    top: css.top / displayScale,
-    right: css.right / displayScale,
-    bottom: css.bottom / displayScale,
-    left: css.left / displayScale,
+    top: css.top / sy,
+    right: css.right / sx,
+    bottom: css.bottom / sy,
+    left: css.left / sx,
   };
 }
 
@@ -82,3 +81,4 @@ export function getSafeBounds(
     height - top - bottom,
   );
 }
+

@@ -6,6 +6,7 @@ import { createButton } from '../ui/Button';
 import { Progress } from '../progress';
 import { t, getLanguage } from '../i18n';
 import { ACTIVE_SEASON, getSeason } from '../seasons';
+import { playClickSound } from '../audio';
 
 /**
  * LevelSelectScene — выбор уровня в горизонтальной сетке.
@@ -139,6 +140,7 @@ export class LevelSelectScene extends Phaser.Scene {
       );
       container.input!.cursor = 'pointer';
       container.on('pointerdown', () => {
+        playClickSound(this);
         this.tweens.add({
           targets: container,
           scale: 0.92,

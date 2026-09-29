@@ -2,7 +2,7 @@ import Phaser from 'phaser';
 import { getLanguage } from '../i18n';
 import { summerAssets } from '../seasons/summer';
 import { assetUrl } from '../assets';
-import { MUSIC_KEY } from '../audio';
+import { MUSIC_KEY, SFX_CLICK_KEY } from '../audio';
 import { UI } from '../palette';
 
 /**
@@ -77,7 +77,7 @@ export class PreloadScene extends Phaser.Scene {
     this.load.audio(MUSIC_KEY, assetUrl('assets/audio/music/main_theme.mp3'));
 
     // Короткие звуки -> assets/audio/sfx/
-    // this.load.audio('click', 'assets/audio/sfx/click.mp3');
+    this.load.audio(SFX_CLICK_KEY, assetUrl('assets/audio/sfx/klick.mp3'));
 
     // Аудио-спрайт -> assets/audiosprites/
     // this.load.audioSprite('sfx', 'assets/audiosprites/sfx.json', [

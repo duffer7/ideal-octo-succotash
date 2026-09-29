@@ -11,9 +11,16 @@
  */
 
 import type Phaser from 'phaser';
+import { assetUrl } from './assets';
 
 /** Ключ фоновой музыки в загрузчике Phaser. */
 export const MUSIC_KEY = 'bgm';
+
+/** Ключ звука клика по элементам интерфейса. */
+export const SFX_CLICK_KEY = 'sfx-click';
+
+/** Громкость звука клика (0..1). */
+export const SFX_CLICK_VOLUME = 0.6;
 
 const STORAGE_KEY = 'kidsgame.music.v1';
 
@@ -21,6 +28,48 @@ const STORAGE_KEY = 'kidsgame.music.v1';
 export const MUSIC_VOLUME = 0.5;
 
 let musicEnabled: boolean = loadInitialMusicEnabled();
+
+/**
+ * Единственный HTMLAudio-элемент фоновой музыки.
+ *
+ * Phaser при `loop: true` заранее ставит в очередь второй AudioBufferSource.
+ * На mp3 этот шов не сходится: предыдущий кусок ещё звучит, а следующий уже
+ * стартовал, и копии наслаиваются. Нативный повтор одного элемента этого не
+ * делает: трек доигрывает до конца и запускается снова с той же громкости.
+ *
+ * Ссылку держим на globalThis, чтобы горячая перезагрузка модуля не создала
+ * второй элемент поверх уже играющего.
+ */
+const MUSIC_ELEMENT_KEY = '__kidsgameMusic';
+
+function getMusicElement(): HTMLAudioElement | null {
+  return (globalThis as typeof globalThis & { [MUSIC_ELEMENT_KEY]?: HTMLAudioElement })[
+    MUSIC_ELEMENT_KEY
+  ] ?? null;
+}
+
+function musicElement(): HTMLAudioElement {
+  const existing = getMusicElement();
+  if (existing) return existing;
+
+  const el = new Audio(assetUrl('assets/audio/music/main_theme.mp3'));
+  el.preload = 'auto';
+  el.loop = false;
+  el.volume = MUSIC_VOLUME;
+  el.addEventListener('ended', () => {
+    if (!musicEnabled) return;
+    // Элемент уже остановлен событием ended — это тот же голос, не вторая копия.
+    el.currentTime = 0;
+    void el.play().catch(() => {
+      // Автовоспроизведение ещё заблокировано — повтор будет с жеста.
+    });
+  });
+
+  (globalThis as typeof globalThis & { [MUSIC_ELEMENT_KEY]?: HTMLAudioElement })[
+    MUSIC_ELEMENT_KEY
+  ] = el;
+  return el;
+}
 
 type MusicListener = (enabled: boolean) => void;
 const listeners = new Set<MusicListener>();
@@ -61,29 +110,31 @@ export function onMusicChange(cb: MusicListener): () => void {
   listeners.add(cb);
   return () => listeners.delete(cb);
 }
-
 /**
- * Пытается запустить фоновую музыку (бесконечным циклом), если она включена.
- * Безопасно вызывать несколько раз и из разных сцен — Phaser не запустит
- * один и тот же звук повторно, пока он играет.
+ * Пытается запустить фоновую музыку, если она включена.
+ * Повторный вызов ничего не добавляет: играет один и тот же элемент.
  */
 export function playBackgroundMusic(scene: Phaser.Scene): void {
   if (!musicEnabled) return;
-  const sound = scene.sound;
-  if (!sound || sound.locked) return;
   if (!scene.cache.audio.exists(MUSIC_KEY)) return;
 
-  const existing = sound.get(MUSIC_KEY) as Phaser.Sound.BaseSound | null;
-  if (existing && existing.isPlaying) return;
+  // Гасим копии, которые Phaser мог оставить с прошлого запуска (loop: true).
+  scene.sound?.stopByKey(MUSIC_KEY);
 
-  sound.play(MUSIC_KEY, { loop: true, volume: MUSIC_VOLUME });
+  const el = musicElement();
+  if (!el.paused && !el.ended) return;
+  void el.play().catch(() => {
+    // Браузер блокирует автоплей до жеста. Меню повторяет вызов по pointerdown.
+  });
 }
 
 /** Останавливает фоновую музыку (например, при выключении в настройках). */
 export function stopBackgroundMusic(scene: Phaser.Scene): void {
-  const sound = scene.sound;
-  if (!sound) return;
-  sound.stopByKey(MUSIC_KEY);
+  scene.sound?.stopByKey(MUSIC_KEY);
+  const el = getMusicElement();
+  if (!el) return;
+  el.pause();
+  el.currentTime = 0;
 }
 
 /**
@@ -97,3 +148,26 @@ export function syncBackgroundMusic(scene: Phaser.Scene): void {
     stopBackgroundMusic(scene);
   }
 }
+
+/**
+ * Проигрывает короткий звук клика по элементу интерфейса.
+ *
+ * Звук клика НЕ зависит от настройки фоновой музыки — это отдельная
+ * подсистема. Играем, если файл загружен. На первом жесте сами
+ * возобновляем AudioContext, иначе браузер проглатывает этот клик.
+ */
+export function playClickSound(scene: Phaser.Scene): void {
+  const sound = scene.sound;
+  if (!sound) return;
+  if (!scene.cache.audio.exists(SFX_CLICK_KEY)) return;
+
+  // Не выходим при sound.locked: первый жест как раз разблокирует AudioContext.
+  // resume() и play() вызываем в том же обработчике, иначе браузер съест клик.
+  const web = sound as Phaser.Sound.WebAudioSoundManager;
+  if (web.context?.state === 'suspended') {
+    void web.context.resume();
+  }
+
+  sound.play(SFX_CLICK_KEY, { volume: SFX_CLICK_VOLUME });
+}
+

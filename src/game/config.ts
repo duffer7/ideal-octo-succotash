@@ -7,7 +7,9 @@ import { GameScene } from './scenes/GameScene';
 import { SettingsScene } from './scenes/SettingsScene';
 import { UI_CSS } from './palette';
 
-/** Логический размер игрового поля (ландшафт / горизонтальная ориентация). */
+/** Логический размер игрового поля (базовый, 16:9 / горизонтальная ориентация).
+ *  При Scale.EXPAND эти размеры — минимальные: мир расширяется под экран,
+ *  поэтому реальные scale.width/height могут быть больше по «свободной» оси. */
 export const GAME_WIDTH = 1280;
 export const GAME_HEIGHT = 720;
 
@@ -18,8 +20,13 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
   scale: {
-    mode: Phaser.Scale.FIT,
+    // EXPAND — заполняем весь экран: по «свободной» оси мир становится больше,
+    // а не появляются чёрные полосы (letterbox), как при Scale.FIT.
+    // Раскладка UI адаптируется автоматически, т.к. сцены читают scale.width/height
+    // через getSafeBounds().
+    mode: Phaser.Scale.EXPAND,
     autoCenter: Phaser.Scale.CENTER_BOTH,
+    expandParent: true,
   },
   physics: {
     default: 'arcade',

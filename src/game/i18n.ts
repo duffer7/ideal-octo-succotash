@@ -53,6 +53,8 @@ type Dictionary = {
   'game.wellDone': string;
   'game.next': string;
   'game.wrong': string;
+  'game.misses': string;
+  'game.missesShort': string;
 
   'orientation.rotate': string;
 
@@ -85,6 +87,8 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'game.wellDone': 'Молодец!',
     'game.next': 'Дальше',
     'game.wrong': 'Ой! Попробуй ещё',
+    'game.misses': 'Неверно: {n}',
+    'game.missesShort': '✕ {n}',
 
     'orientation.rotate': 'Поверните устройство горизонтально',
 
@@ -115,7 +119,8 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'game.wellDone': 'Well done!',
     'game.next': 'Next',
     'game.wrong': 'Oops! Try again',
-
+    'game.misses': 'Wrong: {n}',
+    'game.missesShort': '✕ {n}',
     'orientation.rotate': 'Rotate your device to landscape',
 
     'error.start': 'Failed to start the game 😢',

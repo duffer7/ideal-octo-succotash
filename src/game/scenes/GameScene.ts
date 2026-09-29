@@ -38,6 +38,8 @@ export class GameScene extends Phaser.Scene {
   private mistakes = 0;
 
   private scoreText!: Phaser.GameObjects.Text;
+  /** Счётчик неправильных попаданий (промахов) в HUD. */
+  private missesText!: Phaser.GameObjects.Text;
 
   private items: FallingObject[] = [];
   private baskets = new Map<
@@ -47,8 +49,8 @@ export class GameScene extends Phaser.Scene {
       y: number;
       radius: number;
       container: Phaser.GameObjects.Container;
-      /** Рамка-подсветка, показывается при наведении перетаскиваемой ракушки. */
-      highlight: Phaser.GameObjects.Graphics;
+      /** Мягкое свечение вокруг корзины при наведении перетаскиваемой ракушки. */
+      highlight: Phaser.GameObjects.Image;
     }
   >();
   private spawnTimer?: Phaser.Time.TimerEvent;
@@ -212,6 +214,49 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(1, 0)
       .setDepth(20);
     withStroke(this.scoreText);
+
+    // Счётчик неправильных попаданий под основным счётом, справа.
+    this.missesText = this.add
+      .text(this.bounds.right, this.bounds.y + 56, this.missesLabel(), {
+        fontFamily: getMainFont(getLanguage()),
+        fontSize: '30px',
+        color: UI_CSS.onSurface,
+        fontStyle: 'bold',
+      })
+      .setOrigin(1, 0)
+      .setDepth(20);
+    withStroke(this.missesText);
+  }
+
+  /** Текст счётчика неправильных попаданий. */
+  private missesLabel(): string {
+    return t('game.misses', { n: this.mistakes });
+  }
+
+  /**
+   * Создаёт (один раз) текстуру мягкого круглого свечения — радиальный градиент
+   * от центра к краю. Используется как ореол вокруг корзины при перетаскивании.
+   */
+  private ensureGlowTexture(): string {
+    const key = 'softGlow';
+    if (this.textures.exists(key)) return key;
+
+    const size = 256;
+    const tex = this.textures.createCanvas(key, size, size);
+    if (!tex) return key;
+    const ctx = tex.getContext();
+    const r = size / 2;
+    const grad = ctx.createRadialGradient(r, r, 0, r, r, r);
+    // Плотное ядро и плавное затухание к полностью прозрачному краю.
+    grad.addColorStop(0, 'rgba(255, 255, 255, 0.9)');
+    grad.addColorStop(0.45, 'rgba(255, 255, 255, 0.45)');
+    grad.addColorStop(0.75, 'rgba(255, 255, 255, 0.12)');
+    grad.addColorStop(1, 'rgba(255, 255, 255, 0)');
+    ctx.fillStyle = grad;
+    ctx.fillRect(0, 0, size, size);
+    tex.refresh();
+
+    return key;
   }
 
   /** Две корзины-приёмника внизу экрана. */
@@ -243,18 +288,14 @@ export class GameScene extends Phaser.Scene {
   ): void {
     const children: Phaser.GameObjects.GameObject[] = [];
 
-    // Рамка-подсветка (скрыта по умолчанию): показывается, когда к корзине
-    // тащат подходящую ракушку — чтобы было понятно, что можно отпускать.
-    const highlight = this.add.graphics();
-    const hlInset = size * 0.04;
-    highlight.lineStyle(Math.max(6, size * 0.05), UI.secondary, 1);
-    highlight.strokeRoundedRect(
-      -size / 2 - hlInset,
-      -size / 2 - hlInset,
-      size + hlInset * 2,
-      size + hlInset * 2,
-      size * 0.2,
-    );
+    // Мягкое круглое свечение вокруг корзины (скрыто по умолчанию):
+    // показывается, когда к корзине тащат ракушку, — чтобы было понятно,
+    // что можно отпускать. Не рамка, а лёгкий ореол светлым светом.
+    const highlight = this.add.image(0, 0, this.ensureGlowTexture());
+    const glowSize = size * 1.8;
+    highlight.setDisplaySize(glowSize, glowSize);
+    highlight.setTint(UI.onSurface);
+    highlight.setBlendMode(Phaser.BlendModes.ADD);
     highlight.setAlpha(0);
     highlight.setVisible(false);
     children.push(highlight);
@@ -641,8 +682,11 @@ export class GameScene extends Phaser.Scene {
     if (!this.highlightedCategory) return;
     const basket = this.baskets.get(this.highlightedCategory);
     if (basket) {
-      // Убираем рамку и возвращаем корзину к обычному размеру без анимации,
-      // чтобы не мешать «подскоку» при попадании.
+      // Гасим свечение и останавливаем пульс, возвращая корзину к обычному
+      // размеру без анимации, чтобы не мешать «подскоку» при попадании.
+      const pulseKey = `glowPulse-${this.highlightedCategory}`;
+      (basket.container.getData(pulseKey) as Phaser.Tweens.Tween | null)?.remove();
+      basket.container.setData(pulseKey, null);
       basket.highlight.setVisible(false);
       basket.highlight.setAlpha(0);
       basket.container.setScale(1);
@@ -663,25 +707,43 @@ export class GameScene extends Phaser.Scene {
     if (!basket) return;
     const { highlight } = basket;
 
-    // Правильную цель светим зелёным, неправильную — красноватым.
-    highlight.clear();
-    const size = basket.radius * 2;
-    const hlInset = size * 0.04;
-    highlight.lineStyle(
-      Math.max(6, size * 0.05),
-      correct ? UI.secondary : UI.reward,
-      1,
-    );
-    highlight.strokeRoundedRect(
-      -size / 2 - hlInset,
-      -size / 2 - hlInset,
-      size + hlInset * 2,
-      size + hlInset * 2,
-      size * 0.2,
-    );
+    // Правильную цель светим мягким тёплым светом, неправильную — белым.
+    highlight.setTint(correct ? UI.reward : UI.onSurface);
 
-    highlight.setVisible(on);
-    highlight.setAlpha(on ? 1 : 0);
+    // Останавливаем прежний пульс и возвращаем свечение к базовому масштабу.
+    const pulseKey = `glowPulse-${categoryId}`;
+    (basket.container.getData(pulseKey) as Phaser.Tweens.Tween | null)?.remove();
+    basket.container.setData(pulseKey, null);
+
+    if (on) {
+      highlight.setVisible(true);
+      highlight.setAlpha(0);
+      this.tweens.add({
+        targets: highlight,
+        alpha: correct ? 0.95 : 0.6,
+        duration: 160,
+        ease: 'Quad.out',
+      });
+
+      // Лёгкое «дыхание» свечения — притягивает взгляд к цели.
+      const pulse = this.tweens.add({
+        targets: highlight,
+        scale: { from: 1, to: 1.08 },
+        duration: 620,
+        ease: 'Sine.inOut',
+        yoyo: true,
+        repeat: -1,
+      });
+      basket.container.setData(pulseKey, pulse);
+    } else {
+      this.tweens.add({
+        targets: highlight,
+        alpha: 0,
+        duration: 140,
+        ease: 'Quad.out',
+        onComplete: () => highlight.setVisible(false),
+      });
+    }
 
     // Лёгкий «подскок» правильной корзины, чтобы притягивала взгляд.
     const { container } = basket;
@@ -755,7 +817,10 @@ export class GameScene extends Phaser.Scene {
       alpha: 0,
       duration: 220,
       delay: 140,
-      onComplete: () => record.container.destroy(),
+      onComplete: () => {
+        record.container.destroy();
+        this.items = this.items.filter((it) => it !== record);
+      },
     });
 
     if (this.sorted >= this.config.targetCount) {
@@ -800,8 +865,10 @@ export class GameScene extends Phaser.Scene {
   }
 
   private onWrong(record: FallingObject, basketCategoryId: string): void {
+    // Считаем только неверно распределённые предметы (попавшие не в ту корзину).
     this.mistakes += 1;
     this.updateHud();
+    this.pulseMissesCounter();
 
     // Корзина «отряхивается» при неверном попадании.
     this.animateBasketWrong(basketCategoryId);
@@ -821,22 +888,53 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** Объект упал за пределы корзин — мягко возвращаем наверх. */
+  /** Короткая вспышка-подскок счётчика неверно распределённых предметов. */
+  private pulseMissesCounter(): void {
+    this.tweens.add({
+      targets: this.missesText,
+      scale: { from: 1.25, to: 1 },
+      duration: 260,
+      ease: 'Back.out',
+    });
+  }
+
+  /**
+   * Объект упал ниже последней корзины. Больше не подкидываем его наверх —
+   * он продолжает падать, улетает вниз за пределы экрана и удаляется.
+   *
+   * Упущенный предмет НЕ засчитывается в счётчик неверно распределённых:
+   * его просто не поймали, корзины он не коснулся.
+   */
   private onMissed(record: FallingObject): void {
     if (record.done) return;
+    record.done = true;
+
     const { container } = record;
-    const startY = this.bounds.y + 40;
+    // Отключаем взаимодействие — предмет уже упущен.
+    this.input.setDraggable(container, false);
+    container.disableInteractive();
+
+    // Досылаем предмет за нижний край экрана и убираем.
+    const offscreenY = this.scale.height + container.height;
+    const remaining = offscreenY - container.y;
+    const duration = Math.max(200, (remaining / this.config.fallSpeed) * 1000);
+
+    this.stopFall(container);
     this.tweens.add({
       targets: container,
-      y: startY,
-      duration: 250,
-      ease: 'Quad.in',
-      onComplete: () => this.resumeFall(record),
+      y: offscreenY,
+      duration,
+      ease: 'Sine.in',
+      onComplete: () => {
+        container.destroy();
+        this.items = this.items.filter((it) => it !== record);
+      },
     });
   }
 
   private updateHud(): void {
     this.scoreText.setText(`${this.sorted} / ${this.config.targetCount}`);
+    this.missesText?.setText(this.missesLabel());
   }
 
   // ---------------------------------------------------------------------------
