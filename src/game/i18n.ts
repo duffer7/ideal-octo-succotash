@@ -48,6 +48,7 @@ type Dictionary = {
   'season.summer.name': string;
   'season.summer.cat.sand': string;
   'season.summer.cat.water': string;
+  'season.summer.cat.trash': string;
 
   'game.level': string;
   'game.wellDone': string;
@@ -82,6 +83,7 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'season.summer.name': 'Лето',
     'season.summer.cat.sand': 'Песок',
     'season.summer.cat.water': 'Вода',
+    'season.summer.cat.trash': 'Мусор',
 
     'game.level': 'Уровень {n}',
     'game.wellDone': 'Молодец!',
@@ -114,6 +116,7 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'season.summer.name': 'Summer',
     'season.summer.cat.sand': 'Sand',
     'season.summer.cat.water': 'Water',
+    'season.summer.cat.trash': 'Trash',
 
     'game.level': 'Level {n}',
     'game.wellDone': 'Well done!',

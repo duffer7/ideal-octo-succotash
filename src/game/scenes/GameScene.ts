@@ -21,7 +21,8 @@ interface GameSceneData {
 /** Падающий объект как игровой объект. */
 interface FallingObject {
   container: Phaser.GameObjects.Container;
-  categoryId: string;
+  /** id предмета (совпадает с Basket.itemId его корзины). */
+  itemId: string;
   /** Заблокирован ли объект (уже успешно перетащен). */
   done: boolean;
 }
@@ -55,8 +56,8 @@ export class GameScene extends Phaser.Scene {
   >();
   private spawnTimer?: Phaser.Time.TimerEvent;
   private bounds!: Phaser.Geom.Rectangle;
-  /** Категория корзины, подсвеченной сейчас (null — ничего не подсвечено). */
-  private highlightedCategory: string | null = null;
+  /** id корзины, подсвеченной сейчас (null — ничего не подсвечено). */
+  private highlightedItem: string | null = null;
 
   constructor() {
     super('GameScene');
@@ -73,7 +74,7 @@ export class GameScene extends Phaser.Scene {
     this.mistakes = 0;
     this.items = [];
     this.baskets.clear();
-    this.highlightedCategory = null;
+    this.highlightedItem = null;
 
     this.createBackground();
     this.createBackButton();
@@ -259,22 +260,34 @@ export class GameScene extends Phaser.Scene {
     return key;
   }
 
-  /** Две корзины-приёмника внизу экрана. */
+  /** Корзины-приёмники внизу экрана (по одной на предмет, раскладываются). */
   private createBaskets(): void {
     const { baskets } = this.config;
-    const basketSize = Math.min(this.bounds.height * 0.7, 400);
-    // Разносим корзины к краям экрана (по n% от ширины от центра).
-    const spread = this.bounds.width * 0.2;
+    const count = baskets.length;
+
+    // Свободное место по ширине (с отступами от краёв), разделённое на число
+    // корзин, задаёт верхний предел размера — так корзины не налезают друг на
+    // друга даже при нескольких штуках на узком экране.
+    const usableWidth = this.bounds.width * 0.94;
+    const sizeByWidth = (usableWidth / count) * 0.9;
+
+    // По высоте: корзины делаем крупными, чтобы их было удобно выбирать.
+    const sizeFactor = count >= 4 ? 0.68 : count >= 3 ? 0.72 : 0.82;
+    const basketSize = Math.min(this.bounds.height * sizeFactor, sizeByWidth, 460);
+
     const y = this.bounds.bottom - basketSize * 0.4;
     // Наклон к центральной оси: чем дальше от центра, тем сильнее поворот.
     const tilt = -10;
 
+    // Центры корзин разносим на долю ширины, симметрично относительно центра.
+    const spread = count >= 3 ? this.bounds.width * 0.3 : this.bounds.width * 0.2;
+
     baskets.forEach((basket, i) => {
-      // Раскладываем симметрично относительно центра.
-      const dir = i === 0 ? -1 : 1;
-      const x = this.bounds.centerX + dir * spread;
+      // Позиция от -1 (левый край) до +1 (правый край).
+      const t = count === 1 ? 0 : (i / (count - 1)) * 2 - 1;
+      const x = this.bounds.centerX + t * spread;
       // Наклоняем корзины «навстречу» центру.
-      const rotation = Phaser.Math.DegToRad(dir * tilt);
+      const rotation = Phaser.Math.DegToRad(t * tilt);
       this.createBasket(x, y, basketSize, basket, rotation);
     });
   }
@@ -354,7 +367,7 @@ export class GameScene extends Phaser.Scene {
     container.setRotation(rotation);
     label.setRotation(labelRotation);
 
-    this.baskets.set(basket.categoryId, {
+    this.baskets.set(basket.itemId, {
       x,
       y,
       radius: size / 2,
@@ -364,8 +377,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Анимация корзины при верном попадании: радостный «подскок». */
-  private animateBasketCorrect(categoryId: string): void {
-    const basket = this.baskets.get(categoryId);
+  private animateBasketCorrect(itemId: string): void {
+    const basket = this.baskets.get(itemId);
     if (!basket) return;
     const { container } = basket;
     // Сохраняем исходные углы, чтобы вернуть корзину на место.
@@ -385,8 +398,8 @@ export class GameScene extends Phaser.Scene {
   }
 
   /** Анимация корзины при неверном попадании: «дрожь» + красная вспышка. */
-  private animateBasketWrong(categoryId: string): void {
-    const basket = this.baskets.get(categoryId);
+  private animateBasketWrong(itemId: string): void {
+    const basket = this.baskets.get(itemId);
     if (!basket) return;
     const { container } = basket;
     const baseX = container.x;
@@ -421,33 +434,41 @@ export class GameScene extends Phaser.Scene {
     );
 
     const container = this.createItemVisual(x, this.bounds.y + 40, def);
-    const record: FallingObject = { container, categoryId: def.categoryId, done: false };
+    const record: FallingObject = { container, itemId: def.id, done: false };
     this.items.push(record);
 
-    this.input.setDraggable(container);
+    // Предметы без корзины (например, камни) не перетаскиваются: их нужно
+    // просто пропустить — они падают мимо и исчезают за нижним краем.
+    const isSortable = this.baskets.has(def.id);
+    if (isSortable) {
+      this.input.setDraggable(container);
+
+      container.on(
+        'drag',
+        (_p: Phaser.Input.Pointer, dragX: number, dragY: number) => {
+          if (record.done) return;
+          // Останавливаем падение, пока объект тащат.
+          this.pauseFall(container);
+          // Сбрасываем крен: во время перетаскивания ракушка смотрит ровно.
+          container.setRotation(0);
+          container.x = dragX;
+          container.y = dragY;
+          // Подсвечиваем корзину, над которой сейчас находится ракушка.
+          this.updateBasketHighlight(record.itemId, dragX, dragY);
+        },
+      );
+
+      container.on('dragend', () => {
+        this.clearBasketHighlight();
+        this.onDrop(record);
+      });
+    } else {
+      // Неинтерактивный предмет — просто падает.
+      container.disableInteractive();
+    }
 
     // Навешиваем «живое» падение (гравитация + покачивание + лёгкий крен).
     this.startFall(record);
-
-    container.on(
-      'drag',
-      (_p: Phaser.Input.Pointer, dragX: number, dragY: number) => {
-        if (record.done) return;
-        // Останавливаем падение, пока объект тащат.
-        this.pauseFall(container);
-        // Сбрасываем крен: во время перетаскивания ракушка смотрит ровно.
-        container.setRotation(0);
-        container.x = dragX;
-        container.y = dragY;
-        // Подсвечиваем корзину, над которой сейчас находится ракушка.
-        this.updateBasketHighlight(record.categoryId, dragX, dragY);
-      },
-    );
-
-    container.on('dragend', () => {
-      this.clearBasketHighlight();
-      this.onDrop(record);
-    });
   }
 
   /**
@@ -577,17 +598,25 @@ export class GameScene extends Phaser.Scene {
     const size = Math.min(this.bounds.height * 0.2, 150);
     let visual: Phaser.GameObjects.GameObject;
 
-    if (def.image?.key && this.textures.exists(def.image.key)) {
+    // У предмета может быть одна картинка или несколько (например, камни):
+    // для набора выбираем случайную.
+    const imageKey =
+      def.image?.key ??
+      (def.images && def.images.length > 0
+        ? Phaser.Utils.Array.GetRandom(def.images).key
+        : undefined);
+
+    if (imageKey && this.textures.exists(imageKey)) {
       // Обводка по контуру ракушки — того же цвета, что у текста/иконок,
       // но вдвое тоньше: спрайт крупный, жирный контур выглядел грубо.
       visual = this.makeOutlinedImage(
-        def.image.key,
+        imageKey,
         size,
         PALETTE.deepPurple,
         Math.max(2, size * 0.0175),
       );
     } else {
-      // Заглушка: круг с контуром в цвете категории.
+      // Заглушка: круг с контуром в цвете предмета.
       const c = this.add.circle(0, 0, size / 2, def.color);
 
       c.setStrokeStyle(6, UI.stroke, 0.85);
@@ -604,37 +633,27 @@ export class GameScene extends Phaser.Scene {
     return container;
   }
 
-  /** Выбирает определение объекта по весам категорий. */
+  /**
+   * Выбирает определение объекта по весам (`weight`).
+   * Камни и мусор заданы с низким весом — падают реже остальных предметов.
+   */
   private pickItemDef(): FallingItem {
-    const defs = summerItems;
-    const weights = this.config.spawnWeights;
-
-    if (!weights || defs.length === 0) {
-      // Равномерный выбор среди категорий уровня.
-      const cat = Phaser.Utils.Array.GetRandom(this.config.categories);
-      return {
-        categoryId: cat.id,
-        color: cat.color,
-      };
+    // Берём только предметы, доступные на текущем уровне (fromLevel).
+    const defs = summerItems.filter(
+      (d) => d.fromLevel === undefined || d.fromLevel <= this.level,
+    );
+    if (defs.length === 0) {
+      return { id: 'fallback', color: UI.onSurface };
     }
 
-    const ids = Object.keys(weights);
-    const total = ids.reduce((s, id) => s + (weights[id] ?? 0), 0);
+    // Взвешенный случайный выбор: чем больше weight, тем чаще предмет.
+    const total = defs.reduce((s, d) => s + (d.weight ?? 1), 0);
     let r = Math.random() * total;
-    let chosen = ids[0];
-    for (const id of ids) {
-      r -= weights[id] ?? 0;
-      if (r <= 0) {
-        chosen = id;
-        break;
-      }
+    for (const d of defs) {
+      r -= d.weight ?? 1;
+      if (r <= 0) return d;
     }
-
-    const match = defs.find((d) => d.categoryId === chosen);
-    if (match) return match;
-
-    const cat = this.config.categories.find((c) => c.id === chosen);
-    return { categoryId: chosen, color: cat?.color ?? UI.onSurface };
+    return defs[defs.length - 1];
   }
 
   // ---------------------------------------------------------------------------
@@ -650,60 +669,60 @@ export class GameScene extends Phaser.Scene {
    * приглушённым цветом.
    */
   private updateBasketHighlight(
-    itemCategoryId: string,
+    itemId: string,
     x: number,
     y: number,
   ): void {
     let target: string | null = null;
-    for (const [categoryId, basket] of this.baskets) {
+    for (const [basketId, basket] of this.baskets) {
       const dist = Phaser.Math.Distance.Between(x, y, basket.x, basket.y);
       if (dist < basket.radius) {
-        target = categoryId;
+        target = basketId;
         break;
       }
     }
 
-    if (target === this.highlightedCategory) return;
+    if (target === this.highlightedItem) return;
 
     // Снимаем подсветку со старой корзины.
-    if (this.highlightedCategory) {
-      this.setBasketHighlight(this.highlightedCategory, false, false);
+    if (this.highlightedItem) {
+      this.setBasketHighlight(this.highlightedItem, false, false);
     }
     // Включаем на новой (если попали в какую-то корзину).
     if (target) {
-      const isCorrect = target === itemCategoryId;
+      const isCorrect = target === itemId;
       this.setBasketHighlight(target, true, isCorrect);
     }
-    this.highlightedCategory = target;
+    this.highlightedItem = target;
   }
 
   /** Полностью убирает подсветку со всех корзин. */
   private clearBasketHighlight(): void {
-    if (!this.highlightedCategory) return;
-    const basket = this.baskets.get(this.highlightedCategory);
+    if (!this.highlightedItem) return;
+    const basket = this.baskets.get(this.highlightedItem);
     if (basket) {
       // Гасим свечение и останавливаем пульс, возвращая корзину к обычному
       // размеру без анимации, чтобы не мешать «подскоку» при попадании.
-      const pulseKey = `glowPulse-${this.highlightedCategory}`;
+      const pulseKey = `glowPulse-${this.highlightedItem}`;
       (basket.container.getData(pulseKey) as Phaser.Tweens.Tween | null)?.remove();
       basket.container.setData(pulseKey, null);
       basket.highlight.setVisible(false);
       basket.highlight.setAlpha(0);
       basket.container.setScale(1);
     }
-    this.highlightedCategory = null;
+    this.highlightedItem = null;
   }
 
   /**
    * Включает/выключает подсветку конкретной корзины.
-   * `correct` — совпадает ли категория ракушки с корзиной (правильная цель).
+   * `correct` — совпадает ли предмет с корзиной (правильная цель).
    */
   private setBasketHighlight(
-    categoryId: string,
+    itemId: string,
     on: boolean,
     correct: boolean,
   ): void {
-    const basket = this.baskets.get(categoryId);
+    const basket = this.baskets.get(itemId);
     if (!basket) return;
     const { highlight } = basket;
 
@@ -711,7 +730,7 @@ export class GameScene extends Phaser.Scene {
     highlight.setTint(correct ? UI.reward : UI.onSurface);
 
     // Останавливаем прежний пульс и возвращаем свечение к базовому масштабу.
-    const pulseKey = `glowPulse-${categoryId}`;
+    const pulseKey = `glowPulse-${itemId}`;
     (basket.container.getData(pulseKey) as Phaser.Tweens.Tween | null)?.remove();
     basket.container.setData(pulseKey, null);
 
@@ -760,8 +779,8 @@ export class GameScene extends Phaser.Scene {
     const { container } = record;
 
     // Ищем корзину, в которую попал объект.
-    let hitCategory: string | null = null;
-    for (const [categoryId, basket] of this.baskets) {
+    let hitItem: string | null = null;
+    for (const [basketId, basket] of this.baskets) {
       const dist = Phaser.Math.Distance.Between(
         container.x,
         container.y,
@@ -769,21 +788,21 @@ export class GameScene extends Phaser.Scene {
         basket.y,
       );
       if (dist < basket.radius) {
-        hitCategory = categoryId;
+        hitItem = basketId;
         break;
       }
     }
 
-    if (hitCategory === null) {
+    if (hitItem === null) {
       // Не попали ни в одну корзину — продолжаем падение.
       this.resumeFall(record);
       return;
     }
 
-    if (hitCategory === record.categoryId) {
-      this.onCorrect(record, hitCategory);
+    if (hitItem === record.itemId) {
+      this.onCorrect(record, hitItem);
     } else {
-      this.onWrong(record, hitCategory);
+      this.onWrong(record, hitItem);
     }
   }
 
@@ -794,7 +813,7 @@ export class GameScene extends Phaser.Scene {
     this.startFall(record);
   }
 
-  private onCorrect(record: FallingObject, basketCategoryId: string): void {
+  private onCorrect(record: FallingObject, basketItemId: string): void {
     record.done = true;
     this.input.setDraggable(record.container, false);
     record.container.disableInteractive();
@@ -803,7 +822,7 @@ export class GameScene extends Phaser.Scene {
     this.stopFall(record.container);
 
     // Корзина радостно «подпрыгивает» при верном попадании.
-    this.animateBasketCorrect(basketCategoryId);
+    this.animateBasketCorrect(basketItemId);
 
     // Сама ракушка «вспыхивает» и уменьшается, улетая в корзину.
     this.animateItemCorrect(record.container);
@@ -864,14 +883,14 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  private onWrong(record: FallingObject, basketCategoryId: string): void {
+  private onWrong(record: FallingObject, basketItemId: string): void {
     // Считаем только неверно распределённые предметы (попавшие не в ту корзину).
     this.mistakes += 1;
     this.updateHud();
     this.pulseMissesCounter();
 
     // Корзина «отряхивается» при неверном попадании.
-    this.animateBasketWrong(basketCategoryId);
+    this.animateBasketWrong(basketItemId);
 
     this.cameras.main.flash(200, 255, 80, 80);
 

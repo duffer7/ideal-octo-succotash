@@ -41,6 +41,7 @@ export const PALETTE = {
   skyBlue: 0x4fc3f7,
   sand: 0xffd93d,
   sea: 0x3d7ad9,
+  rock: 0x8d99ae,
 } as const;
 
 // -----------------------------------------------------------------------------
@@ -91,6 +92,8 @@ export const SEASON_COLORS = {
   summer: {
     sand: PALETTE.sand,
     water: PALETTE.sea,
+    // Камни и мусор кладутся в мусорную корзину — общая «каменистая» тема.
+    trash: PALETTE.rock,
   },
 } as const;
 
