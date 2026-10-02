@@ -1,5 +1,5 @@
 import type { Season, LevelConfig, Basket, FallingItem, AssetRef } from './types';
-import { SEASON_COLORS, SEASON_BG_COLORS } from '../palette';
+import { PALETTE, SEASON_COLORS, SEASON_BG_COLORS } from '../palette';
 
 /**
  * Сезон «Лето».
@@ -7,9 +7,9 @@ import { SEASON_COLORS, SEASON_BG_COLORS } from '../palette';
  * Уровни 1–5: фон — пляж и море.
  *   Корзины: Жёлтая (Песок) и Синяя (Вода).
  *   Падают: жёлтые ракушки и синие морские звёзды.
- *   С 3-го уровня появляются камни и новая ракушка (clam3).
+ *   С 3-го уровня появляются камни (их пропускают) и новая ракушка (clam3).
  *
- * Уровни 6–10: добавляется мусорная корзина и мусор (бутылка, банка).
+ * Уровни 6–10: одна общая мусорная корзина сбоку и мусор (бутылка, банка).
  *   С 7-го уровня появляется ещё одна ракушка (special-clam).
  *
  * Картинки падающих объектов подключены через image.path и загружаются в
@@ -71,14 +71,14 @@ const trashImages = [
 ];
 
 /**
- * Объекты лета. У каждого предмета — СВОЯ корзина, поэтому id предмета
- * совпадает с itemId его корзины.
+ * Объекты лета. У собираемого предмета id совпадает с itemId его корзины.
+ * Камни (`collect: false`) падают без корзины — их пропускают.
+ * Бутылка и банка делят одну корзину с id `trash`.
  *
- * Ниже описаны предметы вместе с их корзинами; `fromLevel` задаёт, с какого
- * уровня предмет начинает падать.
+ * `fromLevel` задаёт, с какого уровня предмет начинает падать.
  */
 interface SummerEntity {
-  /** Идентификатор предмета (совпадает с Basket.itemId). */
+  /** Идентификатор предмета (совпадает с Basket.itemId, если есть корзина). */
   id: string;
   /** Ключ локализации названия корзины. */
   labelKey: Basket['labelKey'];
@@ -93,10 +93,23 @@ interface SummerEntity {
    * выбирается случайная из полного набора [image, ...altImages].
    */
   altImages?: AssetRef[];
+  /**
+   * Метки на корзине, если в неё кладут несколько видов (бутылка и банка).
+   * Если не заданы — на корзине показывается `image`.
+   */
+  basketLabelImages?: AssetRef[];
   /** Вес появления (чем больше — тем чаще падает). */
   weight?: number;
+  /** Цена предмета в очках. Камни — 0, их не собирают. */
+  points: number;
   /** С какого уровня предмет доступен. */
   fromLevel?: number;
+  /** false — предмет не собирают, корзины для него нет. По умолчанию true. */
+  collect?: boolean;
+  /** Корзина стоит отдельно от общего ряда. */
+  aside?: boolean;
+  /** Особый эффект (см. FallingItem.effect). Своей корзины у такого предмета нет. */
+  effect?: FallingItem['effect'];
 }
 
 /** Рак ушка-песок (базовая). */
@@ -107,6 +120,7 @@ const entities: SummerEntity[] = [
     color: SEASON_COLORS.summer.sand,
     image: { ...clamSandImage },
     basketImage: { ...basketImage },
+    points: 10,
   },
   {
     id: 'clam3',
@@ -115,6 +129,7 @@ const entities: SummerEntity[] = [
     image: { ...clamSandImage2 },
     basketImage: { ...basketImage },
     fromLevel: 3,
+    points: 15,
   },
   {
     id: 'special-clam',
@@ -123,15 +138,18 @@ const entities: SummerEntity[] = [
     image: { ...specialClamImage },
     basketImage: { ...basketImage },
     fromLevel: 7,
+    points: 25,
   },
   {
     id: 'rock',
     labelKey: 'season.summer.cat.sand',
     color: SEASON_COLORS.summer.sand,
     image: { ...rockImages[0] },
-    basketImage: { ...basketImage },
     altImages: rockImages.slice(1).map((img) => ({ ...img })),
     fromLevel: 3,
+    // Камни не собирают: они падают мимо, их нужно пропустить.
+    collect: false,
+    points: 0,
   },
   {
     id: 'clam2',
@@ -139,6 +157,7 @@ const entities: SummerEntity[] = [
     color: SEASON_COLORS.summer.water,
     image: { ...clamWaterImage },
     basketImage: { ...basketImage },
+    points: 10,
   },
   {
     id: 'star',
@@ -147,22 +166,34 @@ const entities: SummerEntity[] = [
     image: { ...starImage },
     basketImage: { ...basketImage },
     fromLevel: 7,
+    points: 30,
   },
   {
-    id: 'bottle',
+    // Бутылка и банка — один предмет: общая мусорная корзина сбоку.
+    // Вес 2 сохраняет прежнюю частоту (раньше у каждого вида был вес 1).
+    id: 'trash',
     labelKey: 'season.summer.cat.trash',
     color: SEASON_COLORS.summer.trash,
     image: { ...trashImages[0] },
+    altImages: trashImages.slice(1).map((img) => ({ ...img })),
+    basketLabelImages: trashImages.map((img) => ({ ...img })),
     basketImage: { ...trashBinImage },
+    weight: 2,
     fromLevel: TRASH_FROM_LEVEL,
+    aside: true,
+    points: 20,
   },
   {
-    id: 'can',
-    labelKey: 'season.summer.cat.trash',
-    color: SEASON_COLORS.summer.trash,
-    image: { ...trashImages[1] },
-    basketImage: { ...trashBinImage },
-    fromLevel: TRASH_FROM_LEVEL,
+    // Редкий лёд: кладётся в любую корзину и ненадолго замедляет падение.
+    id: 'freeze',
+    labelKey: 'season.summer.cat.water',
+    color: PALETTE.ice,
+    image: { key: 'freeze', path: 'assets/images/levels/freeze.png' },
+    weight: 0.35,
+    fromLevel: 2,
+    collect: false,
+    effect: 'freeze',
+    points: 40,
   },
 ];
 
@@ -177,17 +208,24 @@ const summerItemDefs: FallingItem[] = entities.map((e) => {
     images: allImages.length > 1 ? allImages : undefined,
     weight: e.weight,
     fromLevel: e.fromLevel,
+    effect: e.effect,
+    points: e.points,
   };
 });
 
-/** Одна корзина на каждый предмет. */
-const summerBasketsAll: Basket[] = entities.map((e) => ({
-  itemId: e.id,
-  color: e.color,
-  labelKey: e.labelKey,
-  image: e.basketImage ? { ...e.basketImage } : undefined,
-  labelImage: { ...e.image },
-}));
+/** Корзина на каждый собираемый предмет. Камни в список не попадают. */
+const summerBasketsAll: (Basket | null)[] = entities.map((e) => {
+  if (e.collect === false) return null;
+  return {
+    itemId: e.id,
+    color: e.color,
+    labelKey: e.labelKey,
+    image: e.basketImage ? { ...e.basketImage } : undefined,
+    labelImage: e.basketLabelImages ? undefined : { ...e.image },
+    labelImages: e.basketLabelImages?.map((img) => ({ ...img })),
+    aside: e.aside,
+  };
+});
 
 /** Фон пляжа/моря. */
 const beachBackground = {
@@ -218,14 +256,15 @@ export const summerAssets: AssetRef[] = [
   { key: specialClamImage.key, path: specialClamImage.path },
   ...rockImages.map((img) => ({ key: img.key, path: img.path })),
   ...trashImages.map((img) => ({ key: img.key, path: img.path })),
+  { key: 'freeze', path: 'assets/images/levels/freeze.png' },
 ];
 
 /**
  * Базовый уровень лета с прогрессией сложности.
  *
  * На уровне доступны только предметы (и их корзины) с `fromLevel <= number`.
- * Так новые предметы вводятся постепенно: камни/ракушка — с 3 ур., мусор —
- * с 6 ур. и т.д.
+ * Так новые предметы вводятся постепенно: камни (их пропускают) и ракушка —
+ * с 3 ур., мусор — с 6 ур. и т.д.
  */
 function makeSummerLevel(
   number: number,
@@ -238,12 +277,15 @@ function makeSummerLevel(
   const interval = Math.max(1200 - number * 90, 600);
   const speed = 55 + number * 11; // ур.1 -> 66, ур.10 -> 165
 
-  // Индексы доступных предметов определяют доступные корзины.
+  // Индексы доступных предметов определяют, что падает. Корзина есть только
+  // у собираемых предметов (у камней её нет).
   const available = entities
     .map((e, i) => ({ e, i }))
     .filter(({ e }) => e.fromLevel === undefined || e.fromLevel <= number);
 
-  const baskets = available.map(({ i }) => summerBasketsAll[i]);
+  const baskets = available
+    .map(({ i }) => summerBasketsAll[i])
+    .filter((b): b is Basket => b !== null);
 
   // Относительный вес появления каждого предмета на уровне.
   const totalWeight = available.reduce((s, { e }) => s + (e.weight ?? 1), 0);
@@ -251,6 +293,17 @@ function makeSummerLevel(
   for (const { e } of available) {
     spawnWeights[e.id] = (e.weight ?? 1) / totalWeight;
   }
+
+  // Цель в очках — ожидаемая цена одного сбора на этом уровне,
+  // умноженная на прежнее число предметов. Редкие вещи закрывают её быстрее.
+  const scoring = available.filter(({ e }) => e.points > 0);
+  const scoreWeight = scoring.reduce((s, { e }) => s + (e.weight ?? 1), 0);
+  const expected =
+    scoreWeight === 0
+      ? 10
+      : scoring.reduce((s, { e }) => s + e.points * (e.weight ?? 1), 0) /
+        scoreWeight;
+  const targetScore = Math.max(10, Math.round((target * expected) / 10) * 10);
 
   return {
     number,
@@ -260,18 +313,19 @@ function makeSummerLevel(
     baskets,
     spawnWeights,
     targetCount: target,
+    targetScore,
     spawnIntervalMs: interval,
     fallSpeed: speed,
     ...overrides,
   };
 }
 
-/** Уровни 1–5: пляж, песок и вода (с 3 ур. — камни и новая ракушка). */
+/** Уровни 1–5: пляж, песок и вода (с 3 ур. — камни, которые пропускают, и новая ракушка). */
 const beachLevels: LevelConfig[] = [1, 2, 3, 4, 5].map((n) =>
   makeSummerLevel(n),
 );
 
-/** Уровни 6–10: добавляется мусорная корзина и мусор; с 7 ур. — ракушка. */
+/** Уровни 6–10: одна мусорная корзина сбоку и мусор; с 7 ур. — ещё ракушка и звезда. */
 const trashLevels: LevelConfig[] = [6, 7, 8, 9, 10].map((n) =>
   makeSummerLevel(n),
 );

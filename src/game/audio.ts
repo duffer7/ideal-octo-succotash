@@ -171,3 +171,40 @@ export function playClickSound(scene: Phaser.Scene): void {
   sound.play(SFX_CLICK_KEY, { volume: SFX_CLICK_VOLUME });
 }
 
+export type Chime = 'combo' | 'freeze' | 'super' | 'sad';
+
+/**
+ * Короткий синтезированный сигнал, пока нет отдельных файлов звуков.
+ * Не зависит от переключателя музыки — как и клик по кнопке.
+ */
+export function playChime(scene: Phaser.Scene, kind: Chime): void {
+  const web = scene.sound as Phaser.Sound.WebAudioSoundManager | undefined;
+  const ctx = web?.context;
+  if (!ctx) return;
+  if (ctx.state === 'suspended') void ctx.resume();
+
+  const notes =
+    kind === 'combo'
+      ? [523, 659, 784]
+      : kind === 'freeze'
+        ? [880, 660]
+        : kind === 'super'
+          ? [523, 659, 784, 1046]
+          : [392, 330];
+
+  notes.forEach((freq, i) => {
+    const osc = ctx.createOscillator();
+    const gain = ctx.createGain();
+    const t0 = ctx.currentTime + i * 0.09;
+    osc.type = kind === 'freeze' ? 'triangle' : 'sine';
+    osc.frequency.setValueAtTime(freq, t0);
+    gain.gain.setValueAtTime(0.0001, t0);
+    gain.gain.exponentialRampToValueAtTime(0.12, t0 + 0.02);
+    gain.gain.exponentialRampToValueAtTime(0.0001, t0 + 0.18);
+    osc.connect(gain);
+    gain.connect(ctx.destination);
+    osc.start(t0);
+    osc.stop(t0 + 0.2);
+  });
+}
+

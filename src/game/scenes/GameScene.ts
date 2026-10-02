@@ -1,10 +1,14 @@
 import Phaser from 'phaser';
 import { COLORS, getMainFont, withStroke } from '../theme';
-import { UI, UI_CSS, PALETTE } from '../palette';
+import { UI, UI_CSS, PALETTE, toCss } from '../palette';
 import { getSafeBounds } from '../safeArea';
 import { createButton } from '../ui/Button';
 import { Progress } from '../progress';
 import { t, getLanguage } from '../i18n';
+import { playChime } from '../audio';
+import { Daily } from '../daily';
+import { Helper } from '../characters/Helper';
+import { createStickerIcon, stickerForLevel } from '../stickers';
 import {
   ACTIVE_SEASON,
   getLevel,
@@ -13,9 +17,12 @@ import {
   type LevelConfig,
 } from '../seasons';
 import { summerItems } from '../seasons/summer';
+import { collectPoints, mistakeCost, starsFromScore } from '../scoring';
 
 interface GameSceneData {
   level?: number;
+  /** Ежедневное задание: 15 предметов без ошибок. */
+  mode?: 'daily';
 }
 
 /** Падающий объект как игровой объект. */
@@ -25,17 +32,25 @@ interface FallingObject {
   itemId: string;
   /** Заблокирован ли объект (уже успешно перетащен). */
   done: boolean;
+  /** Редкий предмет «заморозка»: любая корзина считается верной. */
+  effect?: 'freeze';
+  /** Цена предмета в очках. */
+  points: number;
 }
 
 /**
  * GameScene — уровень сортировки.
  * Сверху падают объекты (ракушки/звёзды), игрок перетаскивает их в нужную
- * корзину. Уровень пройден, когда рассортировано targetCount объектов.
+ * корзину. Уровень пройден, когда набрано targetScore очков.
  */
 export class GameScene extends Phaser.Scene {
   private level = 1;
   private config!: LevelConfig;
   private sorted = 0;
+  /** Начислено за верные сборы, вместе с бонусом серии. */
+  private gained = 0;
+  /** Снято за неверные корзины. */
+  private lost = 0;
   private mistakes = 0;
 
   private scoreText!: Phaser.GameObjects.Text;
@@ -59,19 +74,50 @@ export class GameScene extends Phaser.Scene {
   /** id корзины, подсвеченной сейчас (null — ничего не подсвечено). */
   private highlightedItem: string | null = null;
 
+  /** Обычный уровень или ежедневное задание. */
+  private mode: 'level' | 'daily' = 'level';
+  /** Верные ответы подряд. Сбрасывается ошибкой. */
+  private combo = 0;
+  /** Момент старта уровня — для супер-звезды за быстрый проход. */
+  private startedAt = 0;
+  /** Множитель скорости падения: 1 обычно, меньше — во время комбо или заморозки. */
+  private fallTimeScale = 1;
+  private slowTimer?: Phaser.Time.TimerEvent;
+  private slowVeil?: Phaser.GameObjects.Rectangle;
+  private helper?: Helper;
+  /** Чтобы панель победы не открылась дважды. */
+  private finished = false;
+
   constructor() {
     super('GameScene');
   }
 
   init(data: GameSceneData): void {
-    this.level = data.level ?? 1;
+    this.mode = data.mode === 'daily' ? 'daily' : 'level';
+    this.level = this.mode === 'daily' ? 4 : (data.level ?? 1);
   }
 
   create(): void {
     this.config = getLevel(ACTIVE_SEASON, this.level);
+    if (this.mode === 'daily') {
+      this.config = {
+        ...this.config,
+        targetCount: Daily.target,
+        spawnIntervalMs: 1000,
+        fallSpeed: 95,
+      };
+    }
     this.bounds = getSafeBounds(this.scale, 24);
     this.sorted = 0;
+    this.gained = 0;
+    this.lost = 0;
     this.mistakes = 0;
+    this.combo = 0;
+    this.startedAt = this.time.now;
+    this.fallTimeScale = 1;
+    this.finished = false;
+    this.slowTimer = undefined;
+    this.slowVeil = undefined;
     this.items = [];
     this.baskets.clear();
     this.highlightedItem = null;
@@ -80,6 +126,12 @@ export class GameScene extends Phaser.Scene {
     this.createBackButton();
     this.createHud();
     this.createBaskets();
+    this.helper = new Helper(
+      this,
+      this.bounds.x + 108,
+      this.bounds.y + 180,
+      104,
+    );
 
     // Запускаем спавн объектов.
     this.spawnTimer = this.time.addEvent({
@@ -175,9 +227,13 @@ export class GameScene extends Phaser.Scene {
     const season = getSeason(ACTIVE_SEASON);
     const centerX = this.bounds.centerX;
 
+    const levelTitle =
+      this.mode === 'daily'
+        ? t('game.dailyTitle')
+        : t('game.level', { n: this.level });
     withStroke(
       this.add
-        .text(centerX, this.bounds.y, t('game.level', { n: this.level }), {
+        .text(centerX, this.bounds.y, levelTitle, {
           fontFamily: getMainFont(getLanguage()),
           fontSize: '44px',
 
@@ -204,7 +260,7 @@ export class GameScene extends Phaser.Scene {
       .text(
         this.bounds.right,
         this.bounds.y,
-        `${this.sorted} / ${this.config.targetCount}`,
+        this.scoreLabel(),
         {
           fontFamily: getMainFont(getLanguage()),
           fontSize: '44px',
@@ -260,35 +316,52 @@ export class GameScene extends Phaser.Scene {
     return key;
   }
 
-  /** Корзины-приёмники внизу экрана (по одной на предмет, раскладываются). */
+  /**
+   * Корзины-приёмники внизу экрана.
+   * Обычные корзины стоят общим рядом и крупнее прежних.
+   * Мусорная (`aside`) — одна, того же размера, но с зазором справа от ряда.
+   */
   private createBaskets(): void {
     const { baskets } = this.config;
-    const count = baskets.length;
+    const aside = baskets.filter((b) => b.aside);
+    const main = baskets.filter((b) => !b.aside);
+    const count = Math.max(main.length, 1);
+    const hasAside = aside.length > 0;
 
-    // Свободное место по ширине (с отступами от краёв), разделённое на число
-    // корзин, задаёт верхний предел размера — так корзины не налезают друг на
-    // друга даже при нескольких штуках на узком экране.
-    const usableWidth = this.bounds.width * 0.94;
-    const sizeByWidth = (usableWidth / count) * 0.9;
+    const edge = this.bounds.width * 0.025;
+    // Небольшой отступ, чтобы мусорка читалась отдельно от ряда.
+    const asideGap = hasAside ? this.bounds.width * 0.045 : 0;
+    const innerGapRatio = 0.12;
 
-    // По высоте: корзины делаем крупными, чтобы их было удобно выбирать.
-    const sizeFactor = count >= 4 ? 0.68 : count >= 3 ? 0.72 : 0.82;
-    const basketSize = Math.min(this.bounds.height * sizeFactor, sizeByWidth, 460);
+    const slots =
+      count +
+      Math.max(count - 1, 0) * innerGapRatio +
+      (hasAside ? 1 : 0);
+    const usable = this.bounds.width - edge * 2 - asideGap;
+    const sizeByWidth = usable / slots;
+    const sizeFactor = count >= 5 ? 0.86 : count >= 3 ? 0.94 : 1;
+    const basketSize = Math.min(
+      this.bounds.height * sizeFactor,
+      sizeByWidth,
+      560,
+    );
 
     const y = this.bounds.bottom - basketSize * 0.4;
-    // Наклон к центральной оси: чем дальше от центра, тем сильнее поворот.
-    const tilt = -10;
+    const innerGap = basketSize * innerGapRatio;
+    const rowWidth = count * basketSize + Math.max(count - 1, 0) * innerGap;
+    const totalWidth = rowWidth + (hasAside ? asideGap + basketSize : 0);
+    const originX = this.bounds.centerX - totalWidth / 2;
 
-    // Центры корзин разносим на долю ширины, симметрично относительно центра.
-    const spread = count >= 3 ? this.bounds.width * 0.3 : this.bounds.width * 0.2;
-
-    baskets.forEach((basket, i) => {
-      // Позиция от -1 (левый край) до +1 (правый край).
-      const t = count === 1 ? 0 : (i / (count - 1)) * 2 - 1;
-      const x = this.bounds.centerX + t * spread;
-      // Наклоняем корзины «навстречу» центру.
-      const rotation = Phaser.Math.DegToRad(t * tilt);
+    main.forEach((basket, i) => {
+      const t = main.length <= 1 ? 0 : (i / (main.length - 1)) * 2 - 1;
+      const x = originX + basketSize / 2 + i * (basketSize + innerGap);
+      const rotation = Phaser.Math.DegToRad(t * -10);
       this.createBasket(x, y, basketSize, basket, rotation);
+    });
+
+    aside.forEach((basket) => {
+      const x = originX + rowWidth + asideGap + basketSize / 2;
+      this.createBasket(x, y, basketSize, basket, Phaser.Math.DegToRad(8));
     });
   }
 
@@ -328,24 +401,39 @@ export class GameScene extends Phaser.Scene {
       children.push(g);
     }
 
-    // Метка корзины: картинка-ракушка нужной категории, а если её нет —
-    // текстовая подпись (Песок / Вода). Метку держим внутри границ корзины.
+    // Метка корзины: картинка предмета (или несколько — на общей мусорке).
+    // Если картинок нет — текстовая подпись. Метку держим внутри корзины.
     let label: Phaser.GameObjects.Container | Phaser.GameObjects.Text;
     let labelRotation = 0;
     const labelSize = size * 0.42;
+    const labelRefs = (
+      basket.labelImages?.length
+        ? basket.labelImages
+        : basket.labelImage
+          ? [basket.labelImage]
+          : []
+    ).filter((img) => img.key && this.textures.exists(img.key));
 
-    if (basket.labelImage?.key && this.textures.exists(basket.labelImage.key)) {
-      // Ракушку на корзине рисуем с обводкой как у текста/иконок,
-      // но вдвое тоньше (относительно прежнего варианта).
-      label = this.makeOutlinedImage(
-        basket.labelImage.key,
-        labelSize,
-        PALETTE.deepPurple,
-        Math.max(0.75, labelSize * 0.01),
-      );
-      // Центрируем метку внутри корзины, чтобы она не выходила за края.
-      label.setPosition(0, 0);
-      // Разворачиваем метку обратно, чтобы ракушка смотрела ровно.
+    if (labelRefs.length > 0) {
+      const iconSize = labelRefs.length > 1 ? size * 0.28 : labelSize;
+      const iconGap = iconSize * 0.18;
+      const totalW =
+        labelRefs.length * iconSize + (labelRefs.length - 1) * iconGap;
+      const icons = labelRefs.map((img, i) => {
+        const icon = this.makeOutlinedImage(
+          img.key!,
+          iconSize,
+          PALETTE.deepPurple,
+          Math.max(0.75, iconSize * 0.01),
+        );
+        icon.setPosition(
+          -totalW / 2 + iconSize / 2 + i * (iconSize + iconGap),
+          0,
+        );
+        return icon;
+      });
+      label = this.add.container(0, 0, icons);
+      // Разворачиваем метку обратно, чтобы картинка смотрела ровно.
       labelRotation = -rotation;
     } else {
       label = this.add
@@ -434,14 +522,30 @@ export class GameScene extends Phaser.Scene {
     );
 
     const container = this.createItemVisual(x, this.bounds.y + 40, def);
-    const record: FallingObject = { container, itemId: def.id, done: false };
+    const record: FallingObject = {
+      container,
+      itemId: def.id,
+      done: false,
+      effect: def.effect,
+      points: def.points ?? 0,
+    };
     this.items.push(record);
 
-    // Предметы без корзины (например, камни) не перетаскиваются: их нужно
-    // просто пропустить — они падают мимо и исчезают за нижним краем.
-    const isSortable = this.baskets.has(def.id);
-    if (isSortable) {
+    // Предметы без корзины (камни) не перетаскиваются и не ловят нажатия:
+    // их нужно просто пропустить — они падают мимо и исчезают за нижним краем.
+    // Заморозка своей корзины не имеет, но её можно положить в любую.
+    const isSortable = this.baskets.has(def.id) || def.effect === 'freeze';
+    if (!isSortable) {
+      container.disableInteractive();
+    } else {
       this.input.setDraggable(container);
+
+      let originX = 0;
+      let originY = 0;
+      container.on('dragstart', (pointer: Phaser.Input.Pointer) => {
+        originX = pointer.x;
+        originY = pointer.y;
+      });
 
       container.on(
         'drag',
@@ -454,17 +558,26 @@ export class GameScene extends Phaser.Scene {
           container.x = dragX;
           container.y = dragY;
           // Подсвечиваем корзину, над которой сейчас находится ракушка.
-          this.updateBasketHighlight(record.itemId, dragX, dragY);
+          this.updateBasketHighlight(record, dragX, dragY);
         },
       );
 
-      container.on('dragend', () => {
+      container.on('dragend', (pointer: Phaser.Input.Pointer) => {
         this.clearBasketHighlight();
+        // Короткое касание без переноса — подсказка, а не бросок.
+        const moved = Phaser.Math.Distance.Between(
+          originX,
+          originY,
+          pointer.x,
+          pointer.y,
+        );
+        if (moved < 28) {
+          this.showHint(record);
+          this.resumeFall(record);
+          return;
+        }
         this.onDrop(record);
       });
-    } else {
-      // Неинтерактивный предмет — просто падает.
-      container.disableInteractive();
     }
 
     // Навешиваем «живое» падение (гравитация + покачивание + лёгкий крен).
@@ -505,6 +618,7 @@ export class GameScene extends Phaser.Scene {
       ease: 'Sine.in',
       onComplete: () => this.onMissed(record),
     });
+    tween.timeScale = this.fallTimeScale;
     container.setData('fallTween', tween);
 
     // Покачивание и крен масштабируем: у мелких падений размах меньше.
@@ -527,6 +641,7 @@ export class GameScene extends Phaser.Scene {
       },
     });
 
+    sway.timeScale = this.fallTimeScale;
     container.setData('fallAuxTweens', [sway]);
   }
 
@@ -606,7 +721,9 @@ export class GameScene extends Phaser.Scene {
         ? Phaser.Utils.Array.GetRandom(def.images).key
         : undefined);
 
-    if (imageKey && this.textures.exists(imageKey)) {
+    if (def.effect === 'freeze' && !(imageKey && this.textures.exists(imageKey))) {
+      visual = this.makeFreezeCrystal(size);
+    } else if (imageKey && this.textures.exists(imageKey)) {
       // Обводка по контуру ракушки — того же цвета, что у текста/иконок,
       // но вдвое тоньше: спрайт крупный, жирный контур выглядел грубо.
       visual = this.makeOutlinedImage(
@@ -669,7 +786,7 @@ export class GameScene extends Phaser.Scene {
    * приглушённым цветом.
    */
   private updateBasketHighlight(
-    itemId: string,
+    record: FallingObject,
     x: number,
     y: number,
   ): void {
@@ -690,7 +807,8 @@ export class GameScene extends Phaser.Scene {
     }
     // Включаем на новой (если попали в какую-то корзину).
     if (target) {
-      const isCorrect = target === itemId;
+      const isCorrect =
+        record.effect === 'freeze' || target === record.itemId;
       this.setBasketHighlight(target, true, isCorrect);
     }
     this.highlightedItem = target;
@@ -799,7 +917,7 @@ export class GameScene extends Phaser.Scene {
       return;
     }
 
-    if (hitItem === record.itemId) {
+    if (record.effect === 'freeze' || hitItem === record.itemId) {
       this.onCorrect(record, hitItem);
     } else {
       this.onWrong(record, hitItem);
@@ -828,7 +946,29 @@ export class GameScene extends Phaser.Scene {
     this.animateItemCorrect(record.container);
 
     this.sorted += 1;
+    this.combo += 1;
+    const award = collectPoints(record.points, this.combo);
+    this.gained += award;
+    this.showPointsPop(record.container.x, record.container.y, `+${award}`, UI_CSS.reward);
+    this.helper?.happy();
     this.updateHud();
+    this.pulseScore();
+
+    if (record.effect === 'freeze') {
+      this.applySlow(2800);
+      this.showFloatText(t('game.frozen'), toCss(PALETTE.ice), this.bounds.centerY - 10);
+      playChime(this, 'freeze');
+    }
+    if (this.combo >= 3 && this.combo % 3 === 0) {
+      this.applySlow(2200);
+      this.showFloatText(
+        t('game.combo', { n: this.combo }),
+        UI_CSS.reward,
+        this.bounds.centerY - 78,
+      );
+      playChime(this, 'combo');
+      this.helper?.cheer();
+    }
 
     this.tweens.add({
       targets: record.container,
@@ -842,7 +982,11 @@ export class GameScene extends Phaser.Scene {
       },
     });
 
-    if (this.sorted >= this.config.targetCount) {
+    const cleared =
+      this.mode === 'daily'
+        ? this.sorted >= this.config.targetCount
+        : this.netScore() >= this.config.targetScore;
+    if (cleared) {
       this.finishLevel();
     }
   }
@@ -886,7 +1030,18 @@ export class GameScene extends Phaser.Scene {
   private onWrong(record: FallingObject, basketItemId: string): void {
     // Считаем только неверно распределённые предметы (попавшие не в ту корзину).
     this.mistakes += 1;
+    this.combo = 0;
+    const cost = mistakeCost(record.points);
+    this.lost += cost;
+    this.showPointsPop(
+      record.container.x,
+      record.container.y,
+      `-${cost}`,
+      toCss(UI.danger),
+    );
+    this.helper?.sad();
     this.updateHud();
+    this.pulseScore();
     this.pulseMissesCounter();
 
     // Корзина «отряхивается» при неверном попадании.
@@ -951,9 +1106,56 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
+  /** Очки на экране: не уходят ниже нуля, даже если штраф больше набранного. */
+  private netScore(): number {
+    return Math.max(0, this.gained - this.lost);
+  }
+
+  /** В уровне — очки до цели. В ежедневном задании цель по-прежнему «15 без ошибок». */
+  private scoreLabel(): string {
+    if (this.mode === 'daily') {
+      return `${this.sorted} / ${this.config.targetCount}`;
+    }
+    return `${this.netScore()} / ${this.config.targetScore}`;
+  }
+
   private updateHud(): void {
-    this.scoreText.setText(`${this.sorted} / ${this.config.targetCount}`);
+    this.scoreText.setText(this.scoreLabel());
     this.missesText?.setText(this.missesLabel());
+  }
+
+  private pulseScore(): void {
+    this.tweens.add({
+      targets: this.scoreText,
+      scale: { from: 1.18, to: 1 },
+      duration: 220,
+      ease: 'Back.out',
+    });
+  }
+
+  /** Короткое «+10» или «−5» рядом с предметом. */
+  private showPointsPop(x: number, y: number, label: string, color: string): void {
+    const text = withStroke(
+      this.add
+        .text(x, y - 36, label, {
+          fontFamily: getMainFont(getLanguage()),
+          fontSize: '40px',
+          color,
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5)
+        .setDepth(26),
+      undefined,
+      5,
+    );
+    this.tweens.add({
+      targets: text,
+      y: y - 100,
+      alpha: 0,
+      duration: 680,
+      ease: 'Quad.out',
+      onComplete: () => text.destroy(),
+    });
   }
 
   // ---------------------------------------------------------------------------
@@ -962,21 +1164,55 @@ export class GameScene extends Phaser.Scene {
 
   /** Уровень пройден: сохраняем прогресс и показываем результат. */
   private finishLevel(): void {
+    if (this.finished) return;
+    this.finished = true;
     this.spawnTimer?.remove();
+    this.slowTimer?.remove();
     this.time.removeAllEvents();
 
-    // Звёзды: 3 без ошибок, 2 при 1–2 ошибках, 1 при большем числе.
-    const stars = this.mistakes === 0 ? 3 : this.mistakes <= 2 ? 2 : 1;
-    Progress.setResult(this.level, stars, ACTIVE_SEASON);
+    if (this.mode === 'daily') {
+      const clean = this.mistakes === 0;
+      if (clean) Daily.markDone();
+      this.showVictoryPanel({
+        stars: clean ? 3 : 1,
+        superStar: false,
+        firstClear: false,
+        dailyClean: clean,
+      });
+      return;
+    }
 
-    this.showVictoryPanel(stars);
+    // Звёзды — по доле сохранённых очков, а не по числу ошибок.
+    const stars = starsFromScore(this.gained, this.lost);
+    // Супер-звезда — три звезды и быстрый проход.
+    const elapsed = this.time.now - this.startedAt;
+    const superStar = stars === 3 && elapsed <= this.parTimeMs();
+    const firstClear = Progress.getStars(this.level, ACTIVE_SEASON) === 0;
+    Progress.setResult(this.level, stars, ACTIVE_SEASON, superStar);
+
+    this.showVictoryPanel({ stars, superStar, firstClear, dailyClean: null });
+  }
+
+  /**
+   * «Быстро»: около 2.8 с на предмет, но не короче, чем два интервала спавна.
+   * Плюс небольшой запас на последний предмет.
+   */
+  private parTimeMs(): number {
+    const perItem = Math.max(2800, this.config.spawnIntervalMs * 2.2);
+    return this.config.targetCount * perItem + 2500;
   }
 
   /**
    * Панель победы: затемнение экрана, «дышащее» свечение, анимированные звёзды
    * и кнопка перехода. Появляется каскадом снизу вверх для живости.
    */
-  private showVictoryPanel(stars: number): void {
+  private showVictoryPanel(result: {
+    stars: number;
+    superStar: boolean;
+    firstClear: boolean;
+    /** null — обычный уровень. true/false — итог ежедневного задания. */
+    dailyClean: boolean | null;
+  }): void {
     const { centerX, centerY } = this.bounds;
     const panelW = Math.min(this.bounds.width * 0.86, 680);
     const panelH = Math.min(this.bounds.height * 0.72, 560);
@@ -1019,13 +1255,21 @@ export class GameScene extends Phaser.Scene {
     });
 
     // 3. Заголовок «Молодец!».
+    const titleKey =
+      result.dailyClean === null
+        ? 'game.wellDone'
+        : result.dailyClean
+          ? 'game.dailyWin'
+          : 'game.dailyAlmost';
     const title = withStroke(
       this.add
-        .text(centerX, centerY - panelH * 0.3, t('game.wellDone'), {
+        .text(centerX, centerY - panelH * 0.34, t(titleKey), {
           fontFamily: getMainFont(getLanguage()),
-          fontSize: `${Math.round(panelH * 0.14)}px`,
+          fontSize: `${Math.round(panelH * 0.11)}px`,
           color: UI_CSS.onSurface,
           fontStyle: 'bold',
+          align: 'center',
+          wordWrap: { width: panelW * 0.86 },
         })
         .setOrigin(0.5)
         .setDepth(depth + 2),
@@ -1033,33 +1277,91 @@ export class GameScene extends Phaser.Scene {
     title.setAlpha(0);
 
     // 4. Ряд звёзд под заголовком — рисуем векторно и анимируем каскадом.
-    const starSize = panelH * 0.2;
+    const starSize = panelH * 0.16;
     const gap = starSize * 1.12;
-    const starsY = centerY + panelH * 0.02;
+    const starsY = centerY - panelH * 0.06;
     this.createVictoryStars(
       centerX,
       starsY,
-      stars,
+      result.stars,
       starSize,
       gap,
       depth + 2,
     );
+    if (result.superStar) {
+      this.spawnSuperStar(centerX, starsY - starSize * 0.95, starSize * 0.85, depth + 3);
+    }
+    if (result.dailyClean === null) {
+      const scoreLine = withStroke(
+        this.add
+          .text(
+            centerX,
+            centerY - panelH * 0.2,
+            t('game.score', { n: this.netScore() }),
+            {
+              fontFamily: getMainFont(getLanguage()),
+              fontSize: '28px',
+              color: UI_CSS.onSurface,
+              fontStyle: 'bold',
+            },
+          )
+          .setOrigin(0.5)
+          .setDepth(depth + 2)
+          .setAlpha(0),
+        undefined,
+        5,
+      );
+      this.tweens.add({
+        targets: scoreLine,
+        alpha: 1,
+        duration: 260,
+        delay: 360,
+      });
+      this.showVictorySticker(centerX, centerY + panelH * 0.16, result.firstClear, depth + 2);
+    }
 
     // 5. Кнопка перехода.
     const season = getSeason(ACTIVE_SEASON);
     const isLast = this.level >= season.levelCount;
-    const nextLabel = isLast ? t('common.back') : t('game.next');
+    const dailyFail = result.dailyClean === false;
+    const nextLabel = dailyFail
+      ? t('game.retry')
+      : this.mode === 'daily' || isLast
+        ? t('common.back')
+        : t('game.next');
 
-    const next = createButton(this, centerX, centerY + panelH * 0.32, {
-      width: 300,
-      height: 84,
+    const next = createButton(this, centerX, centerY + panelH * 0.34, {
+      width: dailyFail ? 240 : 300,
+      height: 76,
       color: COLORS.secondary,
       label: nextLabel,
-      onClick: () => this.scene.start('LevelSelectScene'),
+      onClick: () => {
+        if (dailyFail) {
+          this.scene.start('GameScene', { mode: 'daily' });
+          return;
+        }
+        this.scene.start('LevelSelectScene');
+      },
     });
     next.setDepth(depth + 2);
     next.setAlpha(0);
     next.setScale(0.8);
+
+    const leave = dailyFail
+      ? createButton(this, centerX + 200, centerY + panelH * 0.34, {
+          width: 160,
+          height: 76,
+          color: COLORS.danger,
+          label: t('common.back'),
+          icon: 'arrow-back',
+          onClick: () => this.scene.start('LevelSelectScene'),
+        })
+      : undefined;
+    if (leave) {
+      leave.setDepth(depth + 2);
+      leave.setAlpha(0);
+      next.setX(centerX - 100);
+    }
 
     // Заголовок и кнопка «выезжают» после появления панели.
     this.tweens.add({
@@ -1069,13 +1371,225 @@ export class GameScene extends Phaser.Scene {
       delay: 180,
     });
     this.tweens.add({
-      targets: next,
+      targets: leave ? [next, leave] : next,
       alpha: 1,
       scale: 1,
       duration: 320,
       delay: 520,
       ease: 'Back.out',
     });
+  }
+
+  /** Четвёртая звезда за быстрый проход почти без ошибок. */
+  private spawnSuperStar(
+    x: number,
+    y: number,
+    size: number,
+    depth: number,
+  ): void {
+    const star = this.createStarShape(size, true, PALETTE.super)
+      .setPosition(x, y)
+      .setDepth(depth)
+      .setScale(0);
+    const caption = withStroke(
+      this.add
+        .text(x, y + size * 0.7, t('game.superStar'), {
+          fontFamily: getMainFont(getLanguage()),
+          fontSize: '22px',
+          color: toCss(PALETTE.super),
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5)
+        .setDepth(depth)
+        .setAlpha(0),
+    );
+    this.tweens.add({
+      targets: star,
+      scale: 1,
+      duration: 420,
+      delay: 780,
+      ease: 'Back.out',
+    });
+    this.tweens.add({
+      targets: caption,
+      alpha: 1,
+      duration: 280,
+      delay: 980,
+    });
+    playChime(this, 'super');
+  }
+
+  /** Открытка уровня на панели победы. */
+  private showVictorySticker(
+    x: number,
+    y: number,
+    firstClear: boolean,
+    depth: number,
+  ): void {
+    const sticker = stickerForLevel(this.level);
+    if (!sticker) return;
+    const icon = createStickerIcon(this, sticker, 86, false)
+      .setPosition(x - 70, y)
+      .setDepth(depth)
+      .setScale(0);
+    const caption = withStroke(
+      this.add
+        .text(x + 16, y, firstClear ? t('game.newSticker') : t(sticker.nameKey), {
+          fontFamily: getMainFont(getLanguage()),
+          fontSize: '26px',
+          color: UI_CSS.onSurface,
+          fontStyle: 'bold',
+        })
+        .setOrigin(0, 0.5)
+        .setDepth(depth)
+        .setAlpha(0),
+    );
+    this.tweens.add({
+      targets: icon,
+      scale: 1,
+      duration: 360,
+      delay: 640,
+      ease: 'Back.out',
+    });
+    this.tweens.add({
+      targets: caption,
+      alpha: 1,
+      duration: 260,
+      delay: 760,
+    });
+  }
+
+  /** Замедляет все текущие и будущие падения на `ms` миллисекунд. */
+  private applySlow(ms: number): void {
+    this.fallTimeScale = 0.45;
+    this.syncFallScale();
+    if (!this.slowVeil) {
+      this.slowVeil = this.add
+        .rectangle(
+          this.scale.width / 2,
+          this.scale.height / 2,
+          this.scale.width,
+          this.scale.height,
+          PALETTE.ice,
+          0.14,
+        )
+        .setDepth(3);
+    }
+    this.slowVeil.setVisible(true);
+    this.slowTimer?.remove();
+    this.slowTimer = this.time.delayedCall(ms, () => {
+      this.fallTimeScale = 1;
+      this.syncFallScale();
+      this.slowVeil?.setVisible(false);
+    });
+  }
+
+  /** Подстраивает уже летящие предметы под текущую скорость. */
+  private syncFallScale(): void {
+    for (const item of this.items) {
+      if (item.done) continue;
+      const tween = item.container.getData('fallTween') as
+        | Phaser.Tweens.Tween
+        | null;
+      if (tween) tween.timeScale = this.fallTimeScale;
+      const aux = item.container.getData('fallAuxTweens') as
+        | Phaser.Tweens.Tween[]
+        | undefined;
+      aux?.forEach((tw) => {
+        tw.timeScale = this.fallTimeScale;
+      });
+    }
+  }
+
+  /** Короткое касание: мягко подсвечивает правильную корзину. */
+  private showHint(record: FallingObject): void {
+    if (record.effect === 'freeze') {
+      for (const id of this.baskets.keys()) this.pulseHint(id);
+      return;
+    }
+    this.pulseHint(record.itemId);
+  }
+
+  private pulseHint(itemId: string): void {
+    const basket = this.baskets.get(itemId);
+    if (!basket) return;
+    const { highlight, container } = basket;
+    highlight.setTint(UI.reward);
+    highlight.setVisible(true);
+    highlight.setAlpha(0.15);
+    this.tweens.add({
+      targets: highlight,
+      alpha: 0.9,
+      duration: 240,
+      yoyo: true,
+      repeat: 2,
+      onComplete: () => {
+        if (this.highlightedItem === itemId) return;
+        highlight.setVisible(false);
+        highlight.setAlpha(0);
+      },
+    });
+    this.tweens.add({
+      targets: container,
+      scale: 1.08,
+      duration: 200,
+      yoyo: true,
+      repeat: 2,
+      onComplete: () => {
+        if (this.highlightedItem !== itemId) container.setScale(1);
+      },
+    });
+  }
+
+  /** Надпись по центру экрана: комбо или заморозка. */
+  private showFloatText(message: string, color: string, y: number): void {
+    const text = withStroke(
+      this.add
+        .text(this.bounds.centerX, y, message, {
+          fontFamily: getMainFont(getLanguage()),
+          fontSize: '54px',
+          color,
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5)
+        .setDepth(28)
+        .setScale(0.4),
+    );
+    this.tweens.add({
+      targets: text,
+      scale: 1,
+      duration: 260,
+      ease: 'Back.out',
+      onComplete: () => {
+        this.tweens.add({
+          targets: text,
+          y: text.y - 48,
+          alpha: 0,
+          delay: 420,
+          duration: 360,
+          onComplete: () => text.destroy(),
+        });
+      },
+    });
+  }
+
+  /** Кристалл льда, пока нет картинки freeze.png. */
+  private makeFreezeCrystal(size: number): Phaser.GameObjects.Graphics {
+    const g = this.add.graphics();
+    const r = size * 0.42;
+    g.fillStyle(PALETTE.ice, 1);
+    g.lineStyle(Math.max(3, size * 0.035), PALETTE.white, 0.95);
+    g.beginPath();
+    g.moveTo(0, -r);
+    g.lineTo(r * 0.72, 0);
+    g.lineTo(0, r);
+    g.lineTo(-r * 0.72, 0);
+    g.closePath();
+    g.fillPath();
+    g.strokePath();
+    g.fillStyle(PALETTE.white, 0.85);
+    g.fillCircle(-r * 0.18, -r * 0.15, r * 0.12);
+    return g;
   }
 
   /**
@@ -1134,6 +1648,7 @@ export class GameScene extends Phaser.Scene {
   private createStarShape(
     size: number,
     filled: boolean,
+    color: number = UI.reward,
   ): Phaser.GameObjects.Container {
     const outer = size / 2;
     const inner = outer * 0.45;
@@ -1146,7 +1661,7 @@ export class GameScene extends Phaser.Scene {
     }
 
     const g = this.add.graphics();
-    const fillColor = filled ? UI.reward : UI.onSurface;
+    const fillColor = filled ? color : UI.onSurface;
     const fillAlpha = filled ? 1 : 0.15;
 
     g.fillStyle(fillColor, fillAlpha);

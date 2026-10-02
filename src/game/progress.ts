@@ -14,6 +14,11 @@ interface SeasonProgress {
   unlocked: number;
   /** Звёзды за каждый уровень (индекс = уровень - 1). */
   stars: number[];
+  /**
+   * Супер-звезда: уровень пройден быстро и почти без ошибок.
+   * Индекс = уровень - 1. Старые сохранения поля не имеют.
+   */
+  superStars?: boolean[];
 }
 
 /** Прогресс всех сезонов. */
@@ -63,18 +68,31 @@ export const Progress = {
     return sp.stars[level - 1] ?? 0;
   },
 
+  /** Есть ли супер-звезда за быстрый чистый проход. */
+  getSuper(level: number, seasonId: SeasonId = ACTIVE_SEASON): boolean {
+    const data = load();
+    const sp = getSeasonProgress(data, seasonId);
+    return sp.superStars?.[level - 1] ?? false;
+  },
+
   /**
    * Отмечает уровень пройденным, сохраняет звёзды (0..3) и открывает следующий.
    * Не открывает уровень выше количества уровней в сезоне.
+   * `superStar` поднимает флаг и больше не снимается.
    */
   setResult(
     level: number,
     stars: number,
     seasonId: SeasonId = ACTIVE_SEASON,
+    superStar = false,
   ): void {
     const data = load();
     const sp = getSeasonProgress(data, seasonId);
     sp.stars[level - 1] = Math.max(sp.stars[level - 1] ?? 0, stars);
+    if (superStar) {
+      if (!sp.superStars) sp.superStars = [];
+      sp.superStars[level - 1] = true;
+    }
 
     const maxLevel = getSeason(seasonId).levelCount;
     if (level >= sp.unlocked && sp.unlocked < maxLevel) {

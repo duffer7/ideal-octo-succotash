@@ -5,6 +5,7 @@ import { MenuScene } from './scenes/MenuScene';
 import { LevelSelectScene } from './scenes/LevelSelectScene';
 import { GameScene } from './scenes/GameScene';
 import { SettingsScene } from './scenes/SettingsScene';
+import { AlbumScene } from './scenes/AlbumScene';
 import { UI_CSS } from './palette';
 
 /** Логический размер игрового поля (базовый, 16:9 / горизонтальная ориентация).
@@ -42,6 +43,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     LevelSelectScene,
     GameScene,
     SettingsScene,
+    AlbumScene,
   ],
   render: {
     antialias: true,

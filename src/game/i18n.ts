@@ -44,8 +44,15 @@ type Dictionary = {
 
   'levelSelect.title': string;
   'levelSelect.season': string;
+  'levelSelect.album': string;
+  'levelSelect.daily': string;
+  'levelSelect.dailyDone': string;
+  'levelSelect.soon': string;
 
   'season.summer.name': string;
+  'season.autumn.name': string;
+  'season.winter.name': string;
+  'season.spring.name': string;
   'season.summer.cat.sand': string;
   'season.summer.cat.water': string;
   'season.summer.cat.trash': string;
@@ -56,6 +63,28 @@ type Dictionary = {
   'game.wrong': string;
   'game.misses': string;
   'game.missesShort': string;
+  'game.combo': string;
+  'game.frozen': string;
+  'game.superStar': string;
+  'game.dailyTitle': string;
+  'game.dailyWin': string;
+  'game.dailyAlmost': string;
+  'game.retry': string;
+  'game.newSticker': string;
+  'game.score': string;
+
+  'album.title': string;
+
+  'sticker.shell': string;
+  'sticker.star': string;
+  'sticker.pebble': string;
+  'sticker.wave': string;
+  'sticker.sun': string;
+  'sticker.bucket': string;
+  'sticker.crab': string;
+  'sticker.bird': string;
+  'sticker.palm': string;
+  'sticker.castle': string;
 
   'orientation.rotate': string;
 
@@ -79,8 +108,15 @@ const DICTIONARIES: Record<Language, Dictionary> = {
 
     'levelSelect.title': 'Выбери уровень',
     'levelSelect.season': 'Лето',
+    'levelSelect.album': 'Альбом',
+    'levelSelect.daily': 'Сегодня: {n} без ошибок',
+    'levelSelect.dailyDone': 'Сегодня готово!',
+    'levelSelect.soon': 'Скоро',
 
     'season.summer.name': 'Лето',
+    'season.autumn.name': 'Осень',
+    'season.winter.name': 'Зима',
+    'season.spring.name': 'Весна',
     'season.summer.cat.sand': 'Песок',
     'season.summer.cat.water': 'Вода',
     'season.summer.cat.trash': 'Мусор',
@@ -91,6 +127,28 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'game.wrong': 'Ой! Попробуй ещё',
     'game.misses': 'Неверно: {n}',
     'game.missesShort': '✕ {n}',
+    'game.combo': 'Комбо ×{n}!',
+    'game.frozen': 'Заморозка!',
+    'game.superStar': 'Супер-звезда!',
+    'game.dailyTitle': 'Сегодня',
+    'game.dailyWin': 'Чисто!',
+    'game.dailyAlmost': 'Почти! Нужно без ошибок',
+    'game.retry': 'Ещё раз',
+    'game.newSticker': 'Новая открытка!',
+    'game.score': 'Очки: {n}',
+
+    'album.title': 'Альбом',
+
+    'sticker.shell': 'Ракушка',
+    'sticker.star': 'Звезда',
+    'sticker.pebble': 'Камешек',
+    'sticker.wave': 'Волна',
+    'sticker.sun': 'Солнце',
+    'sticker.bucket': 'Ведёрко',
+    'sticker.crab': 'Краб',
+    'sticker.bird': 'Чайка',
+    'sticker.palm': 'Пальма',
+    'sticker.castle': 'Замок',
 
     'orientation.rotate': 'Поверните устройство горизонтально',
 
@@ -112,8 +170,15 @@ const DICTIONARIES: Record<Language, Dictionary> = {
 
     'levelSelect.title': 'Choose a level',
     'levelSelect.season': 'Summer',
+    'levelSelect.album': 'Album',
+    'levelSelect.daily': 'Today: {n} with no mistakes',
+    'levelSelect.dailyDone': 'Today is done!',
+    'levelSelect.soon': 'Soon',
 
     'season.summer.name': 'Summer',
+    'season.autumn.name': 'Autumn',
+    'season.winter.name': 'Winter',
+    'season.spring.name': 'Spring',
     'season.summer.cat.sand': 'Sand',
     'season.summer.cat.water': 'Water',
     'season.summer.cat.trash': 'Trash',
@@ -124,6 +189,29 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'game.wrong': 'Oops! Try again',
     'game.misses': 'Wrong: {n}',
     'game.missesShort': '✕ {n}',
+    'game.combo': 'Combo ×{n}!',
+    'game.frozen': 'Freeze!',
+    'game.superStar': 'Super star!',
+    'game.dailyTitle': 'Today',
+    'game.dailyWin': 'Perfect!',
+    'game.dailyAlmost': 'Almost! No mistakes needed',
+    'game.retry': 'Again',
+    'game.newSticker': 'New postcard!',
+    'game.score': 'Score: {n}',
+
+    'album.title': 'Album',
+
+    'sticker.shell': 'Shell',
+    'sticker.star': 'Starfish',
+    'sticker.pebble': 'Pebble',
+    'sticker.wave': 'Wave',
+    'sticker.sun': 'Sun',
+    'sticker.bucket': 'Bucket',
+    'sticker.crab': 'Crab',
+    'sticker.bird': 'Seagull',
+    'sticker.palm': 'Palm',
+    'sticker.castle': 'Castle',
+
     'orientation.rotate': 'Rotate your device to landscape',
 
     'error.start': 'Failed to start the game 😢',

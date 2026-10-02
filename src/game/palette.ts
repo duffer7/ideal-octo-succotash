@@ -42,6 +42,15 @@ export const PALETTE = {
   sand: 0xffd93d,
   sea: 0x3d7ad9,
   rock: 0x8d99ae,
+
+  /** Лёд для редкого предмета «заморозка». */
+  ice: 0x9adcf5,
+  /** Четвёртая супер-звезда. */
+  super: 0xffb703,
+  /** Цвета миров на экране выбора (осень, зима, весна). */
+  autumn: 0xe07a3d,
+  winter: 0x7ec8e3,
+  spring: 0x7dce82,
 } as const;
 
 // -----------------------------------------------------------------------------
@@ -92,7 +101,7 @@ export const SEASON_COLORS = {
   summer: {
     sand: PALETTE.sand,
     water: PALETTE.sea,
-    // Камни и мусор кладутся в мусорную корзину — общая «каменистая» тема.
+    // Цвет заглушки мусорной корзины. Камни не собирают.
     trash: PALETTE.rock,
   },
 } as const;
@@ -100,6 +109,14 @@ export const SEASON_COLORS = {
 /** Цвет фона сезона «Лето», если фоновая картинка не загрузилась. */
 export const SEASON_BG_COLORS = {
   summer: PALETTE.skyBlue,
+} as const;
+
+/** Цвета карточек миров на экране выбора сезона. */
+export const WORLD_COLORS = {
+  summer: PALETTE.skyBlue,
+  autumn: PALETTE.autumn,
+  winter: PALETTE.winter,
+  spring: PALETTE.spring,
 } as const;
 
 // -----------------------------------------------------------------------------

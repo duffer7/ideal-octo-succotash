@@ -1,0 +1,136 @@
+import Phaser from 'phaser';
+import { COLORS, getMainFont, withStroke } from '../theme';
+import { UI_CSS, PALETTE } from '../palette';
+import { buildGrid, type GridCell } from '../layout';
+import { createButton } from '../ui/Button';
+import { t, getLanguage } from '../i18n';
+import { Progress } from '../progress';
+import { ACTIVE_SEASON } from '../seasons';
+import {
+  SUMMER_STICKERS,
+  createStickerIcon,
+  isStickerUnlocked,
+} from '../stickers';
+import { playClickSound } from '../audio';
+
+/**
+ * Альбом открыток. Карточка открывается, когда уровень пройден хотя бы раз.
+ * Супер-звезда отмечает открытку золотой рамкой.
+ */
+export class AlbumScene extends Phaser.Scene {
+  constructor() {
+    super('AlbumScene');
+  }
+
+  create(): void {
+    const { width } = this.scale;
+    const unlocked = SUMMER_STICKERS.filter((s) => isStickerUnlocked(s.level)).length;
+
+    withStroke(
+      this.add
+        .text(width / 2, 28, t('album.title'), {
+          fontFamily: getMainFont(getLanguage()),
+          fontSize: '52px',
+          color: UI_CSS.onSurface,
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5, 0),
+    );
+
+    withStroke(
+      this.add
+        .text(width / 2, 90, `${unlocked} / ${SUMMER_STICKERS.length}`, {
+          fontFamily: getMainFont(getLanguage()),
+          fontSize: '28px',
+          color: UI_CSS.onSurfaceMuted,
+        })
+        .setOrigin(0.5, 0),
+    );
+
+    createButton(this, 100, 56, {
+      width: 140,
+      height: 72,
+      color: COLORS.danger,
+      label: t('common.back'),
+      icon: 'arrow-back',
+      onClick: () => this.scene.start('LevelSelectScene'),
+    });
+
+    const cells = buildGrid(this, SUMMER_STICKERS.length, {
+      maxColumns: 5,
+      maxRows: 2,
+      padding: 36,
+      gap: 18,
+      topOffset: 150,
+    });
+
+    SUMMER_STICKERS.forEach((sticker, i) => {
+      const cell = cells[i];
+      if (!cell) return;
+      const open = isStickerUnlocked(sticker.level);
+      const superStar = Progress.getSuper(sticker.level, ACTIVE_SEASON);
+      this.createCard(cell, sticker.level, open, superStar);
+    });
+  }
+
+  private createCard(
+    cell: GridCell,
+    level: number,
+    open: boolean,
+    superStar: boolean,
+  ): void {
+    const sticker = SUMMER_STICKERS[level - 1];
+    if (!sticker) return;
+    const size = Math.min(cell.width, cell.height) * 0.92;
+    const icon = createStickerIcon(this, sticker, size * 0.72, !open);
+    icon.setY(open ? -size * 0.08 : 0);
+
+    const children: Phaser.GameObjects.GameObject[] = [icon];
+
+    if (superStar && open) {
+      const ring = this.add.graphics();
+      ring.lineStyle(Math.max(4, size * 0.035), PALETTE.super, 1);
+      ring.strokeRoundedRect(
+        -size * 0.36,
+        -size * 0.44,
+        size * 0.72,
+        size * 0.72,
+        size * 0.12,
+      );
+      children.push(ring);
+    }
+
+    if (open) {
+      const name = this.add
+        .text(0, size * 0.34, t(sticker.nameKey), {
+          fontFamily: getMainFont(getLanguage()),
+          fontSize: `${Math.max(16, size * 0.12)}px`,
+          color: UI_CSS.onSurface,
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5);
+      withStroke(name, undefined, 5);
+      children.push(name);
+    }
+
+    const card = this.add.container(cell.x, cell.y, children);
+    if (!open) return;
+
+    card.setSize(size, size);
+    card.setInteractive(
+      new Phaser.Geom.Rectangle(0, 0, size, size),
+      Phaser.Geom.Rectangle.Contains,
+    );
+    card.input!.cursor = 'pointer';
+    card.on('pointerdown', () => {
+      playClickSound(this);
+      this.tweens.add({
+        targets: card,
+        scale: 1.08,
+        duration: 120,
+        yoyo: true,
+        ease: 'Quad.out',
+      });
+    });
+  }
+}

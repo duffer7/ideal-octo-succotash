@@ -1,6 +1,8 @@
 import Phaser from 'phaser';
 import { getLanguage } from '../i18n';
 import { summerAssets } from '../seasons/summer';
+import { STICKER_ASSETS } from '../stickers';
+import { CRAB_ASSETS } from '../characters/Helper';
 import { assetUrl } from '../assets';
 import { MUSIC_KEY, SFX_CLICK_KEY } from '../audio';
 import { UI } from '../palette';
@@ -49,6 +51,11 @@ export class PreloadScene extends Phaser.Scene {
       if (asset.key && asset.path) {
         this.load.image(asset.key, assetUrl(asset.path));
       }
+    }
+    // Открытки и краб. Пока файлов нет — в консоли будет предупреждение,
+    // а игра нарисует заглушку. Когда картинки появятся, подхватятся сами.
+    for (const asset of [...STICKER_ASSETS, ...CRAB_ASSETS]) {
+      this.load.image(asset.key, assetUrl(asset.path));
     }
     // UI -> assets/images/ui/
     this.load.image('lock', assetUrl('assets/images/ui/lock.png'));
