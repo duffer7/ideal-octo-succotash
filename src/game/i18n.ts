@@ -39,8 +39,14 @@ type Dictionary = {
   'settings.title': string;
   'settings.language': string;
   'settings.music': string;
-  'settings.music.on': string;
-  'settings.music.off': string;
+  'settings.sounds': string;
+  'settings.credits': string;
+
+  'credits.title': string;
+  'credits.developer': string;
+  'credits.developerName': string;
+  'credits.music': string;
+  'credits.musicName': string;
 
   'levelSelect.title': string;
   'levelSelect.season': string;
@@ -73,6 +79,24 @@ type Dictionary = {
   'game.newSticker': string;
   'game.score': string;
 
+  'guide.goal': string;
+  'guide.dailyGoal': string;
+  'guide.stars': string;
+  'guide.skip': string;
+  'guide.any': string;
+  'guide.tip.match': string;
+  'guide.tip.daily': string;
+  'guide.tip.rocks': string;
+  'guide.tip.freeze': string;
+  'guide.tip.trash': string;
+  'guide.tip.combo': string;
+  'guide.start': string;
+
+  'exit.title': string;
+  'exit.body': string;
+  'exit.stay': string;
+  'exit.leave': string;
+
   'album.title': string;
 
   'sticker.shell': string;
@@ -96,15 +120,21 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'common.back': '←',
     'common.language': 'Язык',
 
-    'menu.title': 'Обучающая игра',
+    'menu.title': 'Небесная Охота: Поймай Сокровище',
     'menu.play': 'Играть',
     'menu.settings': 'Настройки',
 
     'settings.title': 'Настройки',
     'settings.language': 'Язык',
     'settings.music': 'Музыка',
-    'settings.music.on': 'Вкл',
-    'settings.music.off': 'Выкл',
+    'settings.sounds': 'Звуки',
+    'settings.credits': 'Авторы',
+
+    'credits.title': 'Авторы',
+    'credits.developer': 'Разработчик',
+    'credits.developerName': 'GAV Entertainment',
+    'credits.music': 'Музыка',
+    'credits.musicName': 'AtlasAudio',
 
     'levelSelect.title': 'Выбери уровень',
     'levelSelect.season': 'Лето',
@@ -122,7 +152,7 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'season.summer.cat.trash': 'Мусор',
 
     'game.level': 'Уровень {n}',
-    'game.wellDone': 'Молодец!',
+    'game.wellDone': 'Готово!',
     'game.next': 'Дальше',
     'game.wrong': 'Ой! Попробуй ещё',
     'game.misses': 'Неверно: {n}',
@@ -136,6 +166,24 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'game.retry': 'Ещё раз',
     'game.newSticker': 'Новая открытка!',
     'game.score': 'Очки: {n}',
+
+    'guide.goal': 'Нужно {n} очков',
+    'guide.dailyGoal': '{n} без ошибок',
+    'guide.stars': 'Меньше ошибок — больше звёзд',
+    'guide.skip': 'мимо',
+    'guide.any': 'любая',
+    'guide.tip.match': 'Клади в корзину с такой же картинкой. Коснись — подскажу.',
+    'guide.tip.daily': 'Нужно без единой ошибки.',
+    'guide.tip.rocks': 'Камни не лови.',
+    'guide.tip.freeze': 'Лёд — в любую корзину, и всё замедлится.',
+    'guide.tip.trash': 'Бутылки и банки — в мусорку сбоку.',
+    'guide.tip.combo': 'Три подряд дают больше очков.',
+    'guide.start': 'Вперёд!',
+
+    'exit.title': 'Выйти?',
+    'exit.body': 'Прогресс уровня не сохранится.',
+    'exit.stay': 'Остаться',
+    'exit.leave': 'Выйти',
 
     'album.title': 'Альбом',
 
@@ -158,15 +206,21 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'common.back': '←',
     'common.language': 'Language',
 
-    'menu.title': 'Learning Game',
+    'menu.title': 'Sky Bounty: Catch The Treasure',
     'menu.play': 'Play',
-    'menu.settings': 'Settings',
+    'menu.settings': 'Options',
 
-    'settings.title': 'Settings',
+    'settings.title': 'Options',
     'settings.language': 'Language',
     'settings.music': 'Music',
-    'settings.music.on': 'On',
-    'settings.music.off': 'Off',
+    'settings.sounds': 'Sounds',
+    'settings.credits': 'Credits',
+
+    'credits.title': 'Credits',
+    'credits.developer': 'Developer',
+    'credits.developerName': 'GAV Entertainment',
+    'credits.music': 'Music',
+    'credits.musicName': 'AtlasAudio',
 
     'levelSelect.title': 'Choose a level',
     'levelSelect.season': 'Summer',
@@ -184,7 +238,7 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'season.summer.cat.trash': 'Trash',
 
     'game.level': 'Level {n}',
-    'game.wellDone': 'Well done!',
+    'game.wellDone': 'Completed',
     'game.next': 'Next',
     'game.wrong': 'Oops! Try again',
     'game.misses': 'Wrong: {n}',
@@ -198,6 +252,24 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'game.retry': 'Again',
     'game.newSticker': 'New postcard!',
     'game.score': 'Score: {n}',
+
+    'guide.goal': 'Score {n} points',
+    'guide.dailyGoal': '{n} with no mistakes',
+    'guide.stars': 'Fewer mistakes, more stars',
+    'guide.skip': 'skip',
+    'guide.any': 'any',
+    'guide.tip.match': 'Drop it on the matching picture. Tap it for a hint.',
+    'guide.tip.daily': 'No mistakes at all.',
+    'guide.tip.rocks': 'Let the stones fall past.',
+    'guide.tip.freeze': 'Ice fits any basket and slows the fall.',
+    'guide.tip.trash': 'Bottles and cans go in the side bin.',
+    'guide.tip.combo': 'Three in a row score more.',
+    'guide.start': "Let's go!",
+
+    'exit.title': 'Leave?',
+    'exit.body': "This level's progress won't be saved.",
+    'exit.stay': 'Stay',
+    'exit.leave': 'Leave',
 
     'album.title': 'Album',
 
@@ -273,8 +345,9 @@ export function setLanguage(lang: Language): void {
     // Игнорируем ошибки хранилища.
   }
 
-  // Обновляем lang у <html> для доступности.
+  // Обновляем lang у <html> для доступности и заголовок вкладки.
   document.documentElement.lang = lang;
+  document.title = DICTIONARIES[lang]['menu.title'];
 
   // Не дожидаясь загрузки веб-шрифта, чтобы при смене языка на английский
   // текст сразу отрисовался нужным шрифтом, а не фолбэком.
@@ -289,5 +362,6 @@ export function onLanguageChange(cb: LanguageListener): () => void {
   return () => listeners.delete(cb);
 }
 
-// Синхронизируем атрибут lang при загрузке.
+// Синхронизируем атрибут lang и заголовок вкладки при загрузке.
 document.documentElement.lang = currentLanguage;
+document.title = DICTIONARIES[currentLanguage]['menu.title'];

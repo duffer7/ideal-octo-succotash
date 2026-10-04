@@ -5,6 +5,7 @@ import { MenuScene } from './scenes/MenuScene';
 import { LevelSelectScene } from './scenes/LevelSelectScene';
 import { GameScene } from './scenes/GameScene';
 import { SettingsScene } from './scenes/SettingsScene';
+import { CreditsScene } from './scenes/CreditsScene';
 import { AlbumScene } from './scenes/AlbumScene';
 import { UI_CSS } from './palette';
 
@@ -43,6 +44,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
     LevelSelectScene,
     GameScene,
     SettingsScene,
+    CreditsScene,
     AlbumScene,
   ],
   render: {

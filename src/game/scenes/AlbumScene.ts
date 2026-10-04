@@ -3,6 +3,7 @@ import { COLORS, getMainFont, withStroke } from '../theme';
 import { UI_CSS, PALETTE } from '../palette';
 import { buildGrid, type GridCell } from '../layout';
 import { createButton } from '../ui/Button';
+import { addCartoonSky, createRibbon } from '../ui/gloss';
 import { t, getLanguage } from '../i18n';
 import { Progress } from '../progress';
 import { ACTIVE_SEASON } from '../seasons';
@@ -25,36 +26,32 @@ export class AlbumScene extends Phaser.Scene {
   create(): void {
     const { width } = this.scale;
     const unlocked = SUMMER_STICKERS.filter((s) => isStickerUnlocked(s.level)).length;
+    addCartoonSky(this);
+
+    createRibbon(this, width / 2, 52, t('album.title'), 40).container.setDepth(2);
 
     withStroke(
       this.add
-        .text(width / 2, 28, t('album.title'), {
+        .text(width / 2, 100, `${unlocked} / ${SUMMER_STICKERS.length}`, {
           fontFamily: getMainFont(getLanguage()),
-          fontSize: '52px',
+          fontSize: '28px',
           color: UI_CSS.onSurface,
           fontStyle: 'bold',
         })
-        .setOrigin(0.5, 0),
+        .setOrigin(0.5, 0)
+        .setDepth(2),
+      undefined,
+      5,
     );
 
-    withStroke(
-      this.add
-        .text(width / 2, 90, `${unlocked} / ${SUMMER_STICKERS.length}`, {
-          fontFamily: getMainFont(getLanguage()),
-          fontSize: '28px',
-          color: UI_CSS.onSurfaceMuted,
-        })
-        .setOrigin(0.5, 0),
-    );
-
-    createButton(this, 100, 56, {
-      width: 140,
+    createButton(this, 88, 52, {
+      width: 88,
       height: 72,
       color: COLORS.danger,
       label: t('common.back'),
-      icon: 'arrow-back',
+      glyph: 'left',
       onClick: () => this.scene.start('LevelSelectScene'),
-    });
+    }).setDepth(3);
 
     const cells = buildGrid(this, SUMMER_STICKERS.length, {
       maxColumns: 5,

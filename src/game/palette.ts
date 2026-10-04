@@ -30,12 +30,16 @@ export const PALETTE = {
   gold: 0xffe066,
   deepPurple: 0x512b72,
 
-  // Брендовые
+  // Брендовые — глянцевый «мобильный» набор: пилюли, ленты, панели.
   orange: 0xff8c42,
-  green: 0x6bcb77,
+  green: 0x3dce6e,
   yellow: 0xffd93d,
-  red: 0xee5253,
-  blue: 0x4a90d9,
+  red: 0xff5a6a,
+  blue: 0x3d8ef0,
+  violet: 0x7b4dff,
+  pink: 0xff6fae,
+  /** Светлая лавандовая панель (экран настроек). */
+  panel: 0xcbb6ff,
 
   // Сезон «Лето»
   skyBlue: 0x4fc3f7,
@@ -64,6 +68,16 @@ export const UI = {
   secondary: PALETTE.green,
   accent: PALETTE.yellow,
   danger: PALETTE.red,
+  /** Синяя пилюля «Играть». */
+  play: PALETTE.blue,
+  /** Фиолетовая пилюля «Настройки». */
+  options: PALETTE.violet,
+  /** Зелёная пилюля подтверждения / «Дальше». */
+  confirm: PALETTE.green,
+  /** Жёлтая лента заголовка. */
+  banner: PALETTE.yellow,
+  /** Светлая панель настроек. */
+  panel: PALETTE.panel,
   /** Фон игровой сцены за пределами контента. */
   background: PALETTE.blue,
 

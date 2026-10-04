@@ -1,14 +1,24 @@
 import Phaser from 'phaser';
-import { COLORS, getMainFont, withStroke } from '../theme';
-import { UI_CSS } from '../palette';
+import { COLORS, getMainFont } from '../theme';
 import { createButton } from '../ui/Button';
+import {
+  addCartoonSky,
+  createRibbon,
+  createStars,
+  createStripedBar,
+  fitRibbonLabel,
+} from '../ui/gloss';
 import { getSafeBounds } from '../safeArea';
 import { t, onLanguageChange, getLanguage } from '../i18n';
 import { playBackgroundMusic, syncBackgroundMusic } from '../audio';
+import { Progress } from '../progress';
+import { ACTIVE_SEASON, getSeason } from '../seasons';
+
+const RIBBON_FONT = 46;
 
 /**
- * MenuScene — главное меню с крупными кнопками для детей.
- * Раскладка адаптируется под безопасную зону экрана.
+ * MenuScene — главное меню.
+ * Лента со звёздами, полоска прогресса и вертикальный ряд глянцевых пилюль.
  */
 export class MenuScene extends Phaser.Scene {
   private titleText!: Phaser.GameObjects.Text;
@@ -22,30 +32,50 @@ export class MenuScene extends Phaser.Scene {
 
   create(): void {
     const bounds = getSafeBounds(this.scale, 32);
+    addCartoonSky(this);
 
-    this.titleText = this.add
-      .text(bounds.centerX, bounds.y + 40, t('menu.title'), {
-        fontFamily: getMainFont(getLanguage()),
-        fontSize: '84px',
-        color: UI_CSS.onSurface,
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5, 0);
-    withStroke(this.titleText);
+    createStars(this, bounds.centerX, bounds.y + 28, 3, 3, 42).setDepth(2);
+
+    const ribbon = createRibbon(
+      this,
+      bounds.centerX,
+      bounds.y + 96,
+      t('menu.title'),
+      RIBBON_FONT,
+    );
+    ribbon.container.setDepth(2);
+    this.titleText = ribbon.label;
+
+    const season = getSeason(ACTIVE_SEASON);
+    let earned = 0;
+    for (let level = 1; level <= season.levelCount; level++) {
+      earned += Progress.getStars(level, ACTIVE_SEASON);
+    }
+    const bar = createStripedBar(
+      this,
+      bounds.centerX,
+      bounds.y + 168,
+      Math.min(420, bounds.width * 0.36),
+      36,
+      earned / Math.max(1, season.levelCount * 3),
+    );
+    bar.setDepth(2);
 
     this.buildButtons(bounds);
 
-    // Фоновая музыка. Браузеры блокируют автоплей до первого касания —
-    // поэтому пробуем сразу и повторяем при первом взаимодействии.
     syncBackgroundMusic(this);
     this.input.once(Phaser.Input.Events.POINTER_DOWN, () => {
       playBackgroundMusic(this);
     });
 
-    // Пересобираем кнопки при смене языка (чтобы обновились подписи).
     this.unsubscribe = onLanguageChange(() => {
-      this.titleText.setText(t('menu.title'));
       this.titleText.setFontFamily(getMainFont(getLanguage()));
+      fitRibbonLabel(
+        this.titleText,
+        t('menu.title'),
+        RIBBON_FONT,
+        Math.min(820, bounds.width * 0.7) - 100,
+      );
       this.playButton?.destroy();
       this.settingsButton?.destroy();
       this.buildButtons(bounds);
@@ -57,27 +87,32 @@ export class MenuScene extends Phaser.Scene {
   }
 
   private buildButtons(bounds: Phaser.Geom.Rectangle): void {
-    // Кнопки горизонтально, размеры зависят от доступной площади.
-    const btnW = Math.min(bounds.width * 0.32, 420);
-    const btnH = Math.min(bounds.height * 0.22, 140);
-    const btnY = bounds.centerY + bounds.height * 0.1;
+    const btnW = Math.min(bounds.width * 0.38, 440);
+    const btnH = Math.min(bounds.height * 0.16, 108);
+    const gap = 24;
+    const firstY = bounds.centerY + bounds.height * 0.06;
 
-    this.playButton = createButton(this, bounds.centerX - btnW * 0.6, btnY, {
+    this.playButton = createButton(this, bounds.centerX, firstY, {
       width: btnW,
       height: btnH,
-      color: COLORS.primary,
+      color: COLORS.play,
       label: t('menu.play'),
       onClick: () => this.scene.start('LevelSelectScene'),
     });
+    this.playButton.setDepth(2);
 
-    this.settingsButton = createButton(this, bounds.centerX + btnW * 0.6, btnY, {
-      width: btnW,
-      height: btnH,
-      color: COLORS.secondary,
-      label: t('menu.settings'),
-      onClick: () => this.scene.start('SettingsScene'),
-    });
+    this.settingsButton = createButton(
+      this,
+      bounds.centerX,
+      firstY + btnH + gap,
+      {
+        width: btnW,
+        height: btnH,
+        color: COLORS.options,
+        label: t('menu.settings'),
+        onClick: () => this.scene.start('SettingsScene'),
+      },
+    );
+    this.settingsButton.setDepth(2);
   }
 }
-
-

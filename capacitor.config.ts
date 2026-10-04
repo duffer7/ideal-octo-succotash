@@ -2,7 +2,7 @@ import type { CapacitorConfig } from '@capacitor/cli';
 
 const config: CapacitorConfig = {
   appId: 'com.example.kidsgame',
-  appName: 'KidsGame',
+  appName: 'Sky Bounty',
   webDir: 'dist',
   bundledWebRuntime: false,
   // Настройки для игр: полный экран, ландшафтная ориентация, отключение overscroll

@@ -1,18 +1,28 @@
 import Phaser from 'phaser';
-import { COLORS, getMainFont, withStroke } from '../theme';
-import { UI, UI_CSS } from '../palette';
+import { COLORS, getMainFont } from '../theme';
+import { PALETTE, toCss } from '../palette';
 import { getSafeBounds } from '../safeArea';
 import { createButton } from '../ui/Button';
 import {
-  isMusicEnabled,
+  addCartoonSky,
+  createGear,
+  createRibbon,
+  createStripedBar,
+  fitRibbonLabel,
+  glossyPlate,
+} from '../ui/gloss';
+import {
+  getMusicVolume,
+  getSfxVolume,
   onMusicChange,
+  onSfxChange,
   playClickSound,
-  setMusicEnabled,
+  setMusicVolume,
+  setSfxVolume,
   syncBackgroundMusic,
 } from '../audio';
 import {
   LANGUAGES,
-  LANGUAGE_FLAGS,
   LANGUAGE_LABELS,
   getLanguage,
   onLanguageChange,
@@ -21,282 +31,294 @@ import {
   type Language,
 } from '../i18n';
 
+const RIBBON_FONT = 40;
+
 /**
- * SettingsScene — настройки игры.
- * Содержит выбор языка (русский / английский) и включение фоновой музыки.
- * Обе настройки сохраняются в localStorage (i18n и audio соответственно).
+ * SettingsScene — панель настроек: язык со стрелками,
+ * ползунки музыки и остальных звуков, кнопка авторов.
  */
 export class SettingsScene extends Phaser.Scene {
   private titleText!: Phaser.GameObjects.Text;
   private languageLabel!: Phaser.GameObjects.Text;
+  private languageValue!: Phaser.GameObjects.Text;
   private musicLabel!: Phaser.GameObjects.Text;
-  /** Кнопки выбора языка с их контейнерами (для подсветки активного). */
-  private languageButtons: { lang: Language; container: Phaser.GameObjects.Container }[] = [];
-  /** Кнопка-переключатель музыки и связанные с ней объекты. */
-  private musicToggle!: Phaser.GameObjects.Container;
-  private musicToggleBg!: Phaser.GameObjects.Graphics;
-  private musicToggleLabel!: Phaser.GameObjects.Text;
+  private soundsLabel!: Phaser.GameObjects.Text;
+  private setMusicFill!: (amount: number) => void;
+  private setSoundsFill!: (amount: number) => void;
+  private creditsButton?: Phaser.GameObjects.Container;
+  private creditsX = 0;
+  private creditsY = 0;
+  private dragging: 'music' | 'sfx' | null = null;
+  /** Пока жест, открывший сцену, не отпущен — ползунки не трогаем. */
+  private ignoreVolumeInput = true;
   private unsubscribe?: () => void;
   private unsubscribeMusic?: () => void;
+  private unsubscribeSfx?: () => void;
+  private onPointerMove?: (pointer: Phaser.Input.Pointer) => void;
+  private onPointerUp?: () => void;
 
   constructor() {
     super('SettingsScene');
   }
 
   create(): void {
-    const bounds = getSafeBounds(this.scale, 32);
+    const bounds = getSafeBounds(this.scale, 28);
+    addCartoonSky(this);
 
-    // Кнопка «назад».
-    createButton(this, bounds.x + 50, bounds.y + 50, {
-      width: 90,
-      height: 72,
-      color: COLORS.danger,
-      label: t('common.back'),
-      icon: 'arrow-back',
+    const panelW = Math.min(820, bounds.width * 0.72);
+    const panelH = Math.min(640, bounds.height * 0.92);
+    const panel = glossyPlate(this, panelW, panelH, COLORS.panel, 'panel');
+    panel.setPosition(bounds.centerX, bounds.centerY + 8);
+    panel.setDepth(1);
+
+    const top = bounds.centerY + 8 - panelH / 2;
+
+    const ribbon = createRibbon(
+      this,
+      bounds.centerX,
+      top + 4,
+      t('settings.title'),
+      RIBBON_FONT,
+    );
+    ribbon.container.setDepth(3);
+    this.titleText = ribbon.label;
+
+    createGear(this, bounds.centerX, top + 68, 22).setDepth(3);
+
+    const rowW = Math.min(560, panelW * 0.78);
+    const header = 108;
+    const footer = 124;
+    const rowH = (panelH - header - footer) / 3;
+    const rowY = (index: number): number => top + header + rowH * index;
+    const controlY = (index: number): number => rowY(index) + rowH * 0.62;
+    const labelY = (index: number): number => controlY(index) - (index === 0 ? 64 : 50);
+
+    this.languageLabel = this.makeRowLabel(bounds.centerX, labelY(0));
+    this.languageValue = this.makeLanguageRow(bounds.centerX, controlY(0), rowW);
+
+    this.musicLabel = this.makeRowLabel(bounds.centerX, labelY(1));
+    this.setMusicFill = this.makeVolumeSlider(
+      bounds.centerX,
+      controlY(1),
+      rowW,
+      'music',
+      getMusicVolume,
+      setMusicVolume,
+    );
+
+    this.soundsLabel = this.makeRowLabel(bounds.centerX, labelY(2));
+    this.setSoundsFill = this.makeVolumeSlider(
+      bounds.centerX,
+      controlY(2),
+      rowW,
+      'sfx',
+      getSfxVolume,
+      setSfxVolume,
+    );
+
+    const btn = 88;
+    const actionsY = top + panelH - 70;
+    createButton(this, bounds.centerX - 200, actionsY, {
+      width: btn,
+      height: btn,
+      color: COLORS.confirm,
+      label: '',
+      glyph: 'check',
       onClick: () => this.scene.start('MenuScene'),
+    }).setDepth(3);
+
+    this.creditsX = bounds.centerX;
+    this.creditsY = actionsY;
+
+    createButton(this, bounds.centerX + 200, actionsY, {
+      width: btn,
+      height: btn,
+      color: COLORS.danger,
+      label: '',
+      glyph: 'cross',
+      onClick: () => this.scene.start('MenuScene'),
+    }).setDepth(3);
+
+    this.refreshTexts();
+
+    this.onPointerMove = (pointer) => {
+      if (this.ignoreVolumeInput || !pointer.isDown || !this.dragging) return;
+      this.applyDrag(pointer);
+    };
+    this.onPointerUp = () => {
+      if (this.dragging === 'sfx' && !this.ignoreVolumeInput) playClickSound(this);
+      this.dragging = null;
+      this.ignoreVolumeInput = false;
+    };
+    this.input.on(Phaser.Input.Events.POINTER_MOVE, this.onPointerMove);
+    this.input.on(Phaser.Input.Events.POINTER_UP, this.onPointerUp);
+    this.input.on(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.onPointerUp);
+    this.time.delayedCall(0, () => {
+      if (!this.input.activePointer.isDown) this.ignoreVolumeInput = false;
     });
 
-    // Заголовок.
-    this.titleText = this.add
-      .text(bounds.centerX, bounds.y + 20, t('settings.title'), {
-        fontFamily: getMainFont(getLanguage()),
-        fontSize: '64px',
-        color: UI_CSS.onSurface,
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5, 0);
-    withStroke(this.titleText);
-
-    // Подпись «Язык».
-    this.languageLabel = this.add
-      .text(bounds.centerX, bounds.centerY - 210, t('settings.language'), {
-        fontFamily: getMainFont(getLanguage()),
-        fontSize: '40px',
-        color: UI_CSS.onSurface,
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5);
-    withStroke(this.languageLabel);
-
-    // Кнопки выбора языка — в ряд по центру.
-    const btnW = Math.min(bounds.width * 0.26, 320);
-    const btnH = Math.min(bounds.height * 0.28, 140);
-    const gap = 40;
-    const totalW = btnW * LANGUAGES.length + gap * (LANGUAGES.length - 1);
-    const startX = bounds.centerX - totalW / 2 + btnW / 2;
-
-    this.languageButtons = [];
-    LANGUAGES.forEach((lang, i) => {
-      const container = this.createLanguageButton(
-        startX + i * (btnW + gap),
-        bounds.centerY - 90,
-        btnW,
-        btnH,
-        lang,
-      );
-      this.languageButtons.push({ lang, container });
-    });
-
-    this.refreshLanguageButtons();
-
-    // Подпись «Музыка».
-    this.musicLabel = this.add
-      .text(bounds.centerX, bounds.centerY + 70, t('settings.music'), {
-        fontFamily: getMainFont(getLanguage()),
-        fontSize: '40px',
-        color: UI_CSS.onSurface,
-        fontStyle: 'bold',
-      })
-      .setOrigin(0.5);
-    withStroke(this.musicLabel);
-
-    // Переключатель музыки (кнопка с подписью Вкл/Выкл).
-    this.createMusicToggle(bounds.centerX, bounds.centerY + 180);
-
-    // Обновляем тексты, если язык меняется (например, из другого места).
-    this.unsubscribe = onLanguageChange(() => {
-      this.refreshTexts();
-      this.refreshLanguageButtons();
-    });
-
-    // Реагируем на изменение настройки музыки (в т.ч. из других сцен).
+    this.unsubscribe = onLanguageChange(() => this.refreshTexts());
     this.unsubscribeMusic = onMusicChange(() => {
-      this.refreshMusicToggle();
+      this.setMusicFill(getMusicVolume());
       syncBackgroundMusic(this);
+    });
+    this.unsubscribeSfx = onSfxChange(() => {
+      this.setSoundsFill(getSfxVolume());
     });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
       this.unsubscribe?.();
       this.unsubscribeMusic?.();
+      this.unsubscribeSfx?.();
+      if (this.onPointerMove) {
+        this.input.off(Phaser.Input.Events.POINTER_MOVE, this.onPointerMove);
+      }
+      if (this.onPointerUp) {
+        this.input.off(Phaser.Input.Events.POINTER_UP, this.onPointerUp);
+        this.input.off(Phaser.Input.Events.POINTER_UP_OUTSIDE, this.onPointerUp);
+      }
     });
   }
 
-  /** Кнопка-переключатель фоновой музыки. */
-  private createMusicToggle(x: number, y: number): void {
-    const w = Math.min(this.scale.width * 0.3, 320);
-    const h = Math.min(this.scale.height * 0.22, 120);
-
-    this.musicToggleBg = this.add.graphics();
-
-    this.musicToggleLabel = this.add
-      .text(0, 0, '', {
+  private makeRowLabel(x: number, y: number): Phaser.GameObjects.Text {
+    return this.add
+      .text(x, y, '', {
         fontFamily: getMainFont(getLanguage()),
-        fontSize: `${Math.min(h * 0.34, 48)}px`,
-        color: UI_CSS.onSurface,
+        fontSize: '28px',
+        color: toCss(PALETTE.deepPurple),
         fontStyle: 'bold',
       })
-      .setOrigin(0.5);
-    withStroke(this.musicToggleLabel);
-
-    this.musicToggle = this.add.container(x, y, [
-      this.musicToggleBg,
-      this.musicToggleLabel,
-    ]);
-    this.musicToggle.setSize(w, h);
-    this.musicToggle.setData('w', w);
-    this.musicToggle.setData('h', h);
-    this.musicToggle.setInteractive(
-      new Phaser.Geom.Rectangle(0, 0, w, h),
-      Phaser.Geom.Rectangle.Contains,
-    );
-    this.musicToggle.input!.cursor = 'pointer';
-
-    this.musicToggle.on('pointerdown', () => {
-      playClickSound(this);
-      this.tweens.add({
-        targets: this.musicToggle,
-        scale: 0.94,
-        duration: 80,
-        yoyo: true,
-        onComplete: () => setMusicEnabled(!isMusicEnabled()),
-      });
-    });
-
-    this.refreshMusicToggle();
+      .setOrigin(0.5)
+      .setDepth(3);
   }
 
-  /** Обновляет вид и подпись переключателя музыки. */
-  private refreshMusicToggle(): void {
-    const w = this.musicToggle.getData('w') as number;
-    const h = this.musicToggle.getData('h') as number;
-    const on = isMusicEnabled();
-    this.drawButtonBg(
-      this.musicToggleBg,
-      w,
-      h,
-      on ? COLORS.primary : COLORS.disabled,
-    );
-    this.musicToggleBg.setAlpha(on ? 1 : 0.7);
-    this.musicToggleLabel.setText(
-      `${on ? '♪ ' : ''}${t(on ? 'settings.music.on' : 'settings.music.off')}`,
-    );
-    this.musicToggleLabel.setFontFamily(getMainFont(getLanguage()));
-  }
-
-  /** Кнопка-карточка с флагом и названием языка. */
-  private createLanguageButton(
+  /** Название языка между стрелками, без полоски. */
+  private makeLanguageRow(
     x: number,
     y: number,
-    w: number,
-    h: number,
-    lang: Language,
-  ): Phaser.GameObjects.Container {
-    const bg = this.add.graphics();
-    this.drawButtonBg(bg, w, h, COLORS.secondary);
+    width: number,
+  ): Phaser.GameObjects.Text {
+    const arrow = 72;
+    createButton(this, x - width / 2, y, {
+      width: arrow,
+      height: arrow,
+      color: COLORS.options,
+      label: '',
+      glyph: 'left',
+      onClick: () => this.cycleLanguage(-1),
+    }).setDepth(3);
+    createButton(this, x + width / 2, y, {
+      width: arrow,
+      height: arrow,
+      color: COLORS.primary,
+      label: '',
+      glyph: 'right',
+      onClick: () => this.cycleLanguage(1),
+    }).setDepth(3);
 
-    const flag = this.add
-      .text(0, -h * 0.12, LANGUAGE_FLAGS[lang], {
+    return this.add
+      .text(x, y, '', {
         fontFamily: getMainFont(getLanguage()),
-        fontSize: `${h * 0.34}px`,
-      })
-      .setOrigin(0.5);
-    withStroke(flag);
-
-    const label = this.add
-      .text(0, h * 0.24, LANGUAGE_LABELS[lang], {
-        fontFamily: getMainFont(lang),
-        fontSize: `${h * 0.2}px`,
-        color: UI_CSS.onSurface,
+        fontSize: '34px',
+        color: toCss(PALETTE.deepPurple),
         fontStyle: 'bold',
       })
-      .setOrigin(0.5);
-    withStroke(label);
+      .setOrigin(0.5)
+      .setDepth(5);
+  }
 
-    const container = this.add.container(x, y, [bg, flag, label]);
-    container.setSize(w, h);
-    container.setData('bg', bg);
-    container.setData('flag', flag);
-    container.setData('label', label);
-    container.setData('w', w);
-    container.setData('h', h);
-    container.setInteractive(
-      new Phaser.Geom.Rectangle(0, 0, w, h),
-      Phaser.Geom.Rectangle.Contains,
+  /**
+   * Полоска громкости: нажатие и перетаскивание ставят уровень,
+   * левый край выключает звук полностью.
+   */
+  private makeVolumeSlider(
+    x: number,
+    y: number,
+    width: number,
+    kind: 'music' | 'sfx',
+    getVolume: () => number,
+    setVolume: (volume: number) => void,
+  ): (amount: number) => void {
+    const height = 52;
+    const bar = createStripedBar(this, x, y, width, height, getVolume());
+    bar.setDepth(4);
+
+    const knobSize = 62;
+    const knob = glossyPlate(this, knobSize, knobSize, PALETTE.gold, 'pill');
+    knob.setDepth(6);
+
+    const place = (amount: number): void => {
+      const travel = Math.max(0, width - knobSize);
+      knob.setPosition(x - travel / 2 + travel * amount, y);
+      bar.setValue(amount);
+    };
+    place(getVolume());
+
+    const zone = this.add
+      .zone(x, y, width, knobSize + 20)
+      .setInteractive({ useHandCursor: true })
+      .setDepth(7);
+    zone.on('pointerdown', (pointer: Phaser.Input.Pointer) => {
+      if (this.ignoreVolumeInput) return;
+      this.dragging = kind;
+      this.sliderAt.set(kind, { x, width, setVolume });
+      this.applyDrag(pointer);
+    });
+
+    return place;
+  }
+
+  private sliderAt = new Map<
+    'music' | 'sfx',
+    { x: number; width: number; setVolume: (volume: number) => void }
+  >();
+
+  private applyDrag(pointer: Phaser.Input.Pointer): void {
+    if (!this.dragging) return;
+    const slider = this.sliderAt.get(this.dragging);
+    if (!slider) return;
+    const amount = Phaser.Math.Clamp(
+      (pointer.worldX - (slider.x - slider.width / 2)) / slider.width,
+      0,
+      1,
     );
-    container.input!.cursor = 'pointer';
-
-    container.on('pointerdown', () => {
-      playClickSound(this);
-      this.tweens.add({
-        targets: container,
-        scale: 0.94,
-        duration: 80,
-        yoyo: true,
-        onComplete: () => setLanguage(lang),
-      });
-    });
-
-    return container;
+    slider.setVolume(amount);
   }
 
-  private drawButtonBg(
-    g: Phaser.GameObjects.Graphics,
-    w: number,
-    h: number,
-    color: number,
-  ): void {
-    g.clear();
-    g.fillStyle(color, 1);
-    g.fillRoundedRect(-w / 2, -h / 2, w, h, Math.min(h / 3, w / 3));
-    g.fillStyle(UI.shadow, 0.15);
-    g.fillRoundedRect(-w / 2, h / 2 - h * 0.14, w, h * 0.14, {
-      tl: 0,
-      tr: 0,
-      bl: Math.min(h / 3, w / 3),
-      br: Math.min(h / 3, w / 3),
-    });
+  private placeCreditsButton(): void {
+    this.creditsButton?.destroy();
+    this.creditsButton = createButton(this, this.creditsX, this.creditsY, {
+      width: 240,
+      height: 72,
+      color: COLORS.accent,
+      label: t('settings.credits'),
+      fontSize: 28,
+      onClick: () => this.scene.start('CreditsScene'),
+    }).setDepth(3);
   }
 
-  /** Подсвечивает активный язык, остальные — приглушает. */
-  private refreshLanguageButtons(): void {
-    const active = getLanguage();
-    for (const { lang, container } of this.languageButtons) {
-      const bg = container.getData('bg') as Phaser.GameObjects.Graphics;
-      const w = container.getData('w') as number;
-      const h = container.getData('h') as number;
-      const isActive = lang === active;
-      this.drawButtonBg(bg, w, h, isActive ? COLORS.primary : COLORS.secondary);
-      bg.setAlpha(isActive ? 1 : 0.55);
-    }
+  private cycleLanguage(dir: -1 | 1): void {
+    const index = LANGUAGES.indexOf(getLanguage());
+    const next = LANGUAGES[
+      (index + dir + LANGUAGES.length) % LANGUAGES.length
+    ] as Language;
+    setLanguage(next);
   }
 
-  /** Обновляет текстовые надписи на текущий язык. */
   private refreshTexts(): void {
     const font = getMainFont(getLanguage());
-    this.titleText.setText(t('settings.title'));
     this.titleText.setFontFamily(font);
-    this.languageLabel.setText(t('settings.language'));
+    fitRibbonLabel(this.titleText, t('settings.title'), RIBBON_FONT, 640);
+    this.languageLabel.setText(t('settings.language').toLocaleUpperCase());
     this.languageLabel.setFontFamily(font);
-    this.musicLabel.setText(t('settings.music'));
+    this.languageValue.setText(LANGUAGE_LABELS[getLanguage()]);
+    this.languageValue.setFontFamily(font);
+    this.musicLabel.setText(t('settings.music').toLocaleUpperCase());
     this.musicLabel.setFontFamily(font);
-
-    // Подпись/вид переключателя музыки зависит от языка и текущего состояния.
-    this.refreshMusicToggle();
-
-    // Метки на кнопках языков используют шрифт своего языка.
-    for (const { lang, container } of this.languageButtons) {
-      const label = container.getData('label') as Phaser.GameObjects.Text;
-      label.setFontFamily(getMainFont(lang));
-    }
+    this.soundsLabel.setText(t('settings.sounds').toLocaleUpperCase());
+    this.soundsLabel.setFontFamily(font);
+    this.setMusicFill(getMusicVolume());
+    this.setSoundsFill(getSfxVolume());
+    this.placeCreditsButton();
   }
 }

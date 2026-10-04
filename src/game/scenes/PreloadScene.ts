@@ -4,8 +4,8 @@ import { summerAssets } from '../seasons/summer';
 import { STICKER_ASSETS } from '../stickers';
 import { CRAB_ASSETS } from '../characters/Helper';
 import { assetUrl } from '../assets';
-import { MUSIC_KEY, SFX_CLICK_KEY } from '../audio';
-import { UI } from '../palette';
+import { MUSIC_KEY, MUSIC_TRACKS, SFX_CLICK_KEY } from '../audio';
+import { addCartoonSky, createStripedBar } from '../ui/gloss';
 
 /**
  * PreloadScene — загрузка ассетов с индикатором прогресса.
@@ -20,8 +20,6 @@ export class PreloadScene extends Phaser.Scene {
   }
 
   preload(): void {
-    // Логируем ошибки загрузки: без картинки игра рисует цветную заглушку,
-    // поэтому «тихий» пропуск ассета легко не заметить.
     this.load.on('loaderror', (file: Phaser.Loader.File) => {
       console.warn(
         '[Preload] Не удалось загрузить ассет:',
@@ -31,7 +29,16 @@ export class PreloadScene extends Phaser.Scene {
       );
     });
 
-    this.createProgressBar();
+    addCartoonSky(this);
+    const bar = createStripedBar(
+      this,
+      this.scale.width / 2,
+      this.scale.height / 2,
+      this.scale.width * 0.46,
+      40,
+      0,
+    );
+    this.load.on('progress', (value: number) => bar.setValue(value));
     this.loadAssets();
 
     this.load.on('complete', () => {
@@ -60,6 +67,11 @@ export class PreloadScene extends Phaser.Scene {
     // UI -> assets/images/ui/
     this.load.image('lock', assetUrl('assets/images/ui/lock.png'));
     this.load.image('arrow-back', assetUrl('assets/images/ui/arrow-back.png'));
+    this.load.image('star-score', assetUrl('assets/images/ui/star-score.png'));
+    this.load.image(
+      'star-score-inactive',
+      assetUrl('assets/images/ui/star-score-inactive.png'),
+    );
     // this.load.image('button', 'assets/images/ui/button.png');
 
     // Иллюстрации уровней -> assets/images/levels/
@@ -81,7 +93,7 @@ export class PreloadScene extends Phaser.Scene {
 
     // === Аудио ===
     // Музыка -> assets/audio/music/
-    this.load.audio(MUSIC_KEY, assetUrl('assets/audio/music/main_theme.mp3'));
+    this.load.audio(MUSIC_KEY, assetUrl(MUSIC_TRACKS[0]));
 
     // Короткие звуки -> assets/audio/sfx/
     this.load.audio(SFX_CLICK_KEY, assetUrl('assets/audio/sfx/klick.mp3'));
@@ -96,34 +108,6 @@ export class PreloadScene extends Phaser.Scene {
     // Озвучка/тексты под текущий язык -> assets/localization/<lang>/
     // this.load.audio('voice_0', `assets/localization/${lang}/voice_0.mp3`);
     void lang;
-  }
-
-  private createProgressBar(): void {
-    const { width, height } = this.scale;
-
-    const boxW = width * 0.7;
-    const boxH = 40;
-    const x = width / 2;
-    const y = height / 2;
-
-    const border = this.add.graphics();
-    border.lineStyle(6, UI.stroke, 0.9);
-    border.strokeRoundedRect(x - boxW / 2, y - boxH / 2, boxW, boxH, boxH / 2);
-
-    const bar = this.add.graphics();
-    this.load.on('progress', (value: number) => {
-      bar.clear();
-      bar.fillStyle(UI.stroke, 0.9);
-      const pad = 6;
-      const w = (boxW - pad * 2) * value;
-      bar.fillRoundedRect(
-        x - boxW / 2 + pad,
-        y - boxH / 2 + pad,
-        Math.max(w, 0.001),
-        boxH - pad * 2,
-        (boxH - pad * 2) / 2,
-      );
-    });
   }
 }
 

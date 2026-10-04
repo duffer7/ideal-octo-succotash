@@ -1,8 +1,9 @@
 import Phaser from 'phaser';
 import { getMainFont, withStroke } from '../theme';
-import { UI, UI_CSS } from '../palette';
+import { UI_CSS } from '../palette';
 import { getLanguage } from '../i18n';
 import { playClickSound } from '../audio';
+import { createGlyph, glossyPlate, type Glyph } from './gloss';
 
 export interface ButtonOptions {
   /** Ширина контейнера. */
@@ -18,6 +19,8 @@ export interface ButtonOptions {
    * рисуется картинка по центру кнопки (например, стрелка «назад»).
    */
   icon?: string;
+  /** Векторная пиктограмма поверх глянцевой кнопки. */
+  glyph?: Glyph;
   /** Размер шрифта (по умолчанию — от высоты кнопки). */
   fontSize?: number;
   /** Колбэк по нажатию. */
@@ -25,7 +28,7 @@ export interface ButtonOptions {
 }
 
 /**
- * Крупная скруглённая кнопка, удобная для детских пальцев.
+ * Крупная глянцевая кнопка: широкая — пилюля, почти квадратная — значок.
  * Возвращает Phaser-контейнер, который можно позиционировать где угодно.
  */
 export function createButton(
@@ -35,38 +38,34 @@ export function createButton(
   options: ButtonOptions,
 ): Phaser.GameObjects.Container {
   const { width: w, height: h, color, label, onClick } = options;
-  const fontSize = options.fontSize ?? Math.min(h * 0.42, 56);
+  const fontSize = options.fontSize ?? Math.min(h * 0.38, 48);
+  const shape = w / h < 1.45 ? 'badge' : 'pill';
 
-  const bg = scene.add.graphics();
-  bg.fillStyle(color, 1);
-  bg.fillRoundedRect(-w / 2, -h / 2, w, h, Math.min(h / 2, w / 2));
-  // Лёгкая «тень» снизу для объёма.
-  bg.fillStyle(UI.shadow, 0.15);
-  bg.fillRoundedRect(-w / 2, h / 2 - h * 0.18, w, h * 0.18, {
-    tl: 0,
-    tr: 0,
-    bl: Math.min(h / 2, w / 2),
-    br: Math.min(h / 2, w / 2),
-  });
+  const bg = glossyPlate(scene, w, h, color, shape);
 
-  // Иконка вместо текста: рисуем картинку по центру кнопки.
   const useIcon = !!options.icon && scene.textures.exists(options.icon);
   let content: Phaser.GameObjects.GameObject;
 
-  if (useIcon) {
+  if (options.glyph) {
+    content = createGlyph(scene, options.glyph, Math.min(w, h) * 0.72);
+  } else if (useIcon) {
     content = scene.add
-      .image(0, 0, options.icon!)
-      .setDisplaySize(h * 0.55, h * 0.55);
+      .image(0, -2, options.icon!)
+      .setDisplaySize(h * 0.5, h * 0.5);
   } else {
     content = scene.add
-      .text(0, 0, label, {
+      .text(0, -2, label.toLocaleUpperCase(), {
         fontFamily: getMainFont(getLanguage()),
         fontSize: `${fontSize}px`,
         color: UI_CSS.onSurface,
         fontStyle: 'bold',
       })
       .setOrigin(0.5);
-    withStroke(content as Phaser.GameObjects.Text);
+    withStroke(
+      content as Phaser.GameObjects.Text,
+      undefined,
+      Math.max(4, fontSize * 0.14),
+    );
   }
 
   const container = scene.add.container(x, y, [bg, content]);
@@ -92,5 +91,3 @@ export function createButton(
 
   return container;
 }
-
-
