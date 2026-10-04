@@ -1,6 +1,6 @@
 import Phaser from 'phaser';
 import { COLORS, getMainFont, withStroke } from '../theme';
-import { UI, UI_CSS, PALETTE, WORLD_COLORS } from '../palette';
+import { UI, UI_CSS, PALETTE } from '../palette';
 import { buildGrid, fontForCell, type GridCell } from '../layout';
 import { createButton } from '../ui/Button';
 import {
@@ -11,22 +11,14 @@ import {
   glossyPlate,
 } from '../ui/gloss';
 import { Progress } from '../progress';
-import { t, getLanguage, type TranslationKey } from '../i18n';
-import { ACTIVE_SEASON, SEASON_ORDER, getSeason, type SeasonId } from '../seasons';
+import { t, getLanguage } from '../i18n';
+import { ACTIVE_SEASON, getSeason } from '../seasons';
 import { playClickSound } from '../audio';
 import { Daily } from '../daily';
 
-const WORLD_NAME: Record<SeasonId, TranslationKey> = {
-  summer: 'season.summer.name',
-  autumn: 'season.autumn.name',
-  winter: 'season.winter.name',
-  spring: 'season.spring.name',
-};
-
 /**
- * LevelSelectScene — выбор уровня в горизонтальной сетке.
- * Показывает уровни активного сезона (сейчас — «Лето», 10 уровней).
- * Карточки адаптивно располагаются под размер/безопасную зону экрана.
+ * LevelSelectScene — выбор уровня.
+ * Показывает уровни активного сезона.
  */
 export class LevelSelectScene extends Phaser.Scene {
   constructor() {
@@ -62,7 +54,7 @@ export class LevelSelectScene extends Phaser.Scene {
       color: COLORS.danger,
       label: t('common.back'),
       glyph: 'left',
-      onClick: () => this.scene.start('MenuScene'),
+      onClick: () => this.scene.start('SeasonSelectScene'),
     }).setDepth(3);
 
     createButton(this, width - 130, 52, {
@@ -74,7 +66,6 @@ export class LevelSelectScene extends Phaser.Scene {
       onClick: () => this.scene.start('AlbumScene'),
     }).setDepth(3);
 
-    this.createWorlds(width);
     this.createDaily(width);
 
     // Адаптивная сетка: 10 уровней — 5 колонок × 2 строки.
@@ -83,8 +74,8 @@ export class LevelSelectScene extends Phaser.Scene {
       maxRows: 2,
       padding: 36,
       gap: 16,
-      // Шапка: заголовок, миры и ежедневное задание.
-      topOffset: 280,
+      // Шапка: заголовок и ежедневное задание.
+      topOffset: 230,
     });
 
     const unlocked = Progress.getUnlocked(ACTIVE_SEASON);
@@ -106,73 +97,10 @@ export class LevelSelectScene extends Phaser.Scene {
     });
   }
 
-  /** Четыре сезона-мира. Открыто пока только лето. */
-  private createWorlds(width: number): void {
-    const gap = 14;
-    const count = SEASON_ORDER.length;
-    const cardW = Math.min(220, (width - 80 - gap * (count - 1)) / count);
-    const cardH = 62;
-    const total = count * cardW + (count - 1) * gap;
-    const startX = width / 2 - total / 2 + cardW / 2;
-    const y = 168;
-
-    SEASON_ORDER.forEach((id, i) => {
-      const open = id === 'summer';
-      const x = startX + i * (cardW + gap);
-      const plate = glossyPlate(
-        this,
-        cardW,
-        cardH,
-        open ? WORLD_COLORS[id] : UI.disabled,
-        'pill',
-      );
-      plate.setAlpha(open ? 1 : 0.7);
-
-      const label = this.add
-        .text(0, -1, open ? t(WORLD_NAME[id]) : t('levelSelect.soon'), {
-          fontFamily: getMainFont(getLanguage()),
-          fontSize: '24px',
-          color: UI_CSS.onSurface,
-          fontStyle: 'bold',
-        })
-        .setOrigin(0.5);
-      withStroke(label, undefined, 4);
-
-      const card = this.add.container(x, y, [plate, label]);
-      card.setDepth(2);
-      card.setSize(cardW, cardH);
-      card.setInteractive(
-        new Phaser.Geom.Rectangle(0, 0, cardW, cardH),
-        Phaser.Geom.Rectangle.Contains,
-      );
-      card.input!.cursor = 'pointer';
-      card.on('pointerdown', () => {
-        playClickSound(this);
-        if (open) {
-          this.tweens.add({
-            targets: card,
-            scale: 0.94,
-            duration: 80,
-            yoyo: true,
-          });
-          return;
-        }
-        this.tweens.add({
-          targets: card,
-          angle: { from: -4, to: 4 },
-          duration: 70,
-          yoyo: true,
-          repeat: 2,
-          onComplete: () => card.setAngle(0),
-        });
-      });
-    });
-  }
-
   /** Кнопка ежедневного задания. */
   private createDaily(width: number): void {
     const done = Daily.isDone();
-    createButton(this, width / 2, 236, {
+    createButton(this, width / 2, 190, {
       width: Math.min(520, width * 0.46),
       height: 58,
       color: done ? COLORS.confirm : COLORS.accent,

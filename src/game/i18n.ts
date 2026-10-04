@@ -48,6 +48,8 @@ type Dictionary = {
   'credits.music': string;
   'credits.musicName': string;
 
+  'seasonSelect.title': string;
+
   'levelSelect.title': string;
   'levelSelect.season': string;
   'levelSelect.album': string;
@@ -136,6 +138,8 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'credits.music': 'Музыка',
     'credits.musicName': 'AtlasAudio',
 
+    'seasonSelect.title': 'Выбери сезон',
+
     'levelSelect.title': 'Выбери уровень',
     'levelSelect.season': 'Лето',
     'levelSelect.album': 'Альбом',
@@ -221,6 +225,8 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'credits.developerName': 'GAV Entertainment',
     'credits.music': 'Music',
     'credits.musicName': 'AtlasAudio',
+
+    'seasonSelect.title': 'Choose a season',
 
     'levelSelect.title': 'Choose a level',
     'levelSelect.season': 'Summer',

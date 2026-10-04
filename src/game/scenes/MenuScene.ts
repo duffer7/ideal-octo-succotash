@@ -5,7 +5,6 @@ import {
   addCartoonSky,
   createRibbon,
   createStars,
-  createStripedBar,
   fitRibbonLabel,
 } from '../ui/gloss';
 import { getSafeBounds } from '../safeArea';
@@ -14,7 +13,7 @@ import { playBackgroundMusic, syncBackgroundMusic } from '../audio';
 import { Progress } from '../progress';
 import { ACTIVE_SEASON, getSeason } from '../seasons';
 
-const RIBBON_FONT = 46;
+const RIBBON_FONT = 66;
 
 /**
  * MenuScene — главное меню.
@@ -34,12 +33,12 @@ export class MenuScene extends Phaser.Scene {
     const bounds = getSafeBounds(this.scale, 32);
     addCartoonSky(this);
 
-    createStars(this, bounds.centerX, bounds.y + 28, 3, 3, 42).setDepth(2);
+    createStars(this, bounds.centerX, bounds.y + 48, 3, 3, 72).setDepth(2);
 
     const ribbon = createRibbon(
       this,
       bounds.centerX,
-      bounds.y + 96,
+      bounds.y + 156,
       t('menu.title'),
       RIBBON_FONT,
     );
@@ -51,15 +50,6 @@ export class MenuScene extends Phaser.Scene {
     for (let level = 1; level <= season.levelCount; level++) {
       earned += Progress.getStars(level, ACTIVE_SEASON);
     }
-    const bar = createStripedBar(
-      this,
-      bounds.centerX,
-      bounds.y + 168,
-      Math.min(420, bounds.width * 0.36),
-      36,
-      earned / Math.max(1, season.levelCount * 3),
-    );
-    bar.setDepth(2);
 
     this.buildButtons(bounds);
 
@@ -97,7 +87,7 @@ export class MenuScene extends Phaser.Scene {
       height: btnH,
       color: COLORS.play,
       label: t('menu.play'),
-      onClick: () => this.scene.start('LevelSelectScene'),
+      onClick: () => this.scene.start('SeasonSelectScene'),
     });
     this.playButton.setDepth(2);
 
