@@ -67,10 +67,10 @@ export class PreloadScene extends Phaser.Scene {
     // UI -> assets/images/ui/
     this.load.image('lock', assetUrl('assets/images/ui/lock.png'));
     this.load.image('arrow-back', assetUrl('assets/images/ui/arrow-back.png'));
-    this.load.image('star-score', assetUrl('assets/images/ui/star-score.png'));
+    this.load.image('star-score', assetUrl('assets/images/ui/star-score-v1.png'));
     this.load.image(
       'star-score-inactive',
-      assetUrl('assets/images/ui/star-score-inactive.png'),
+      assetUrl('assets/images/ui/star-score-inactive-v1.png'),
     );
     // this.load.image('button', 'assets/images/ui/button.png');
 

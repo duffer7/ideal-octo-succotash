@@ -11,6 +11,7 @@ import {
 } from '../ui/gloss';
 import { t, getLanguage, type TranslationKey } from '../i18n';
 import { ACTIVE_SEASON, SEASON_ORDER, type SeasonId } from '../seasons';
+import { summerCardImage } from '../seasons/summer';
 import { playClickSound } from '../audio';
 
 const WORLD_NAME: Record<SeasonId, TranslationKey> = {
@@ -53,6 +54,77 @@ export class SeasonSelectScene extends Phaser.Scene {
     this.createSeasons(bounds);
   }
 
+  /**
+   * Лицо карточки лета: картинка пляжа со скруглёнными углами, как у остальных карточек.
+   * Если текстура ещё не загружена — null, и рисуется цветная пластина.
+   */
+  private summerCardFace(
+    cardW: number,
+    cardH: number,
+  ): Phaser.GameObjects.Image | null {
+    const srcKey = summerCardImage.key;
+    if (!srcKey || !this.textures.exists(srcKey)) return null;
+
+    const width = Math.max(8, Math.round(cardW));
+    const height = Math.max(8, Math.round(cardH));
+    const lineWidth = Math.max(3, Math.min(width, height) * 0.055);
+    // Обводка рисуется по центру контура, поэтому вокруг тела нужен запас,
+    // иначе внешняя половина рамки и скругления срезаются краем текстуры.
+    const margin = Math.ceil(lineWidth / 2) + 2;
+    const tw = width + margin * 2;
+    const th = height + margin * 2;
+    const key = `summer-card-face-v2-${width}x${height}`;
+
+    if (!this.textures.exists(key)) {
+      const src = this.textures.get(srcKey).getSourceImage() as CanvasImageSource & {
+        width: number;
+        height: number;
+      };
+      const tex = this.textures.createCanvas(key, tw, th);
+      const ctx = tex?.getContext();
+      if (tex && ctx && src.width > 0 && src.height > 0) {
+        const radius = Math.min(width, height) * 0.28;
+        const r = Math.max(0, Math.min(radius, width / 2, height / 2));
+        const trace = (): void => {
+          ctx.beginPath();
+          ctx.moveTo(margin + r, margin);
+          ctx.arcTo(margin + width, margin, margin + width, margin + height, r);
+          ctx.arcTo(margin + width, margin + height, margin, margin + height, r);
+          ctx.arcTo(margin, margin + height, margin, margin, r);
+          ctx.arcTo(margin, margin, margin + width, margin, r);
+          ctx.closePath();
+        };
+
+        ctx.clearRect(0, 0, tw, th);
+        ctx.save();
+        trace();
+        ctx.clip();
+        const scale = Math.max(width / src.width, height / src.height);
+        const dw = src.width * scale;
+        const dh = src.height * scale;
+        ctx.drawImage(
+          src,
+          margin + (width - dw) / 2,
+          margin + (height - dh) / 2,
+          dw,
+          dh,
+        );
+        ctx.restore();
+
+        trace();
+        ctx.lineWidth = lineWidth;
+        ctx.strokeStyle = 'rgba(255,255,255,0.92)';
+        ctx.stroke();
+        tex.refresh();
+      }
+    }
+
+    if (!this.textures.exists(key)) return null;
+    const image = this.add.image(0, 0, key);
+    image.setOrigin((margin + width / 2) / tw, (margin + height / 2) / th);
+    return image;
+  }
+
   /** Четыре сезона. Зайти можно только в тот, который уже есть в игре. */
   private createSeasons(bounds: Phaser.Geom.Rectangle): void {
     const gap = 22;
@@ -66,11 +138,12 @@ export class SeasonSelectScene extends Phaser.Scene {
     SEASON_ORDER.forEach((id, i) => {
       const open = id === ACTIVE_SEASON;
       const x = startX + i * (cardW + gap);
-      const plate = glossyPlate(this, cardW, cardH, WORLD_COLORS[id], 'badge');
-      if (!open) plate.setAlpha(0.88);
+      const art = id === 'summer' ? this.summerCardFace(cardW, cardH) : null;
+      const plate = art ?? glossyPlate(this, cardW, cardH, WORLD_COLORS[id], 'badge');
+      if (!open && !art) plate.setAlpha(0.88);
 
       const label = this.add
-        .text(0, open ? 8 : cardH * 0.16, t(WORLD_NAME[id]), {
+        .text(0, art ? cardH * 0.36 : open ? 8 : cardH * 0.16, t(WORLD_NAME[id]), {
           fontFamily: getMainFont(getLanguage()),
           fontSize: '36px',
           color: UI_CSS.onSurface,

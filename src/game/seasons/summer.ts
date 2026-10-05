@@ -240,6 +240,12 @@ const beachClouds = {
   path: 'assets/images/backgrounds/summer_clouds.png',
 };
 
+/** Картинка карточки лета на экране выбора сезона. */
+export const summerCardImage = {
+  key: 'summer_card',
+  path: 'assets/images/backgrounds/card-summer.png',
+};
+
 /**
  * Ассеты лета для загрузки в PreloadScene.
  * Держим пути здесь — рядом с уровнями, которые их используют.
@@ -247,6 +253,7 @@ const beachClouds = {
 export const summerAssets: AssetRef[] = [
   { key: beachBackground.key, path: beachBackground.path },
   { key: beachClouds.key, path: beachClouds.path },
+  { key: summerCardImage.key, path: summerCardImage.path },
   { key: basketImage.key, path: basketImage.path },
   { key: trashBinImage.key, path: trashBinImage.path },
   { key: clamSandImage.key, path: clamSandImage.path },
