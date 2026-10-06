@@ -11,8 +11,18 @@ import {
 } from '../ui/gloss';
 import { t, getLanguage, type TranslationKey } from '../i18n';
 import { ACTIVE_SEASON, SEASON_ORDER, type SeasonId } from '../seasons';
+import { autumnCardImage } from '../seasons/autumn';
 import { summerCardImage } from '../seasons/summer';
+import { winterCardImage } from '../seasons/winter';
+import { springCardImage } from '../seasons/spring';
 import { playClickSound } from '../audio';
+
+const CARD_ART: Partial<Record<SeasonId, string>> = {
+  summer: summerCardImage.key,
+  autumn: autumnCardImage.key,
+  winter: winterCardImage.key,
+  spring: springCardImage.key,
+};
 
 const WORLD_NAME: Record<SeasonId, TranslationKey> = {
   summer: 'season.summer.name',
@@ -55,15 +65,15 @@ export class SeasonSelectScene extends Phaser.Scene {
   }
 
   /**
-   * Лицо карточки лета: картинка пляжа со скруглёнными углами, как у остальных карточек.
+   * Лицо карточки сезона: картинка со скруглёнными углами, как у цветных пластин.
    * Если текстура ещё не загружена — null, и рисуется цветная пластина.
    */
-  private summerCardFace(
+  private seasonCardFace(
     cardW: number,
     cardH: number,
+    srcKey: string,
   ): Phaser.GameObjects.Image | null {
-    const srcKey = summerCardImage.key;
-    if (!srcKey || !this.textures.exists(srcKey)) return null;
+    if (!this.textures.exists(srcKey)) return null;
 
     const width = Math.max(8, Math.round(cardW));
     const height = Math.max(8, Math.round(cardH));
@@ -73,7 +83,7 @@ export class SeasonSelectScene extends Phaser.Scene {
     const margin = Math.ceil(lineWidth / 2) + 2;
     const tw = width + margin * 2;
     const th = height + margin * 2;
-    const key = `summer-card-face-v2-${width}x${height}`;
+    const key = `${srcKey}-face-v2-${width}x${height}`;
 
     if (!this.textures.exists(key)) {
       const src = this.textures.get(srcKey).getSourceImage() as CanvasImageSource & {
@@ -138,7 +148,8 @@ export class SeasonSelectScene extends Phaser.Scene {
     SEASON_ORDER.forEach((id, i) => {
       const open = id === ACTIVE_SEASON;
       const x = startX + i * (cardW + gap);
-      const art = id === 'summer' ? this.summerCardFace(cardW, cardH) : null;
+      const artKey = CARD_ART[id];
+      const art = artKey ? this.seasonCardFace(cardW, cardH, artKey) : null;
       const plate = art ?? glossyPlate(this, cardW, cardH, WORLD_COLORS[id], 'badge');
       if (!open && !art) plate.setAlpha(0.88);
 

@@ -1,11 +1,14 @@
 import Phaser from 'phaser';
 import { getLanguage } from '../i18n';
+import { autumnCardImage } from '../seasons/autumn';
 import { summerAssets } from '../seasons/summer';
 import { STICKER_ASSETS } from '../stickers';
 import { CRAB_ASSETS } from '../characters/Helper';
 import { assetUrl } from '../assets';
 import { MUSIC_KEY, MUSIC_TRACKS, SFX_CLICK_KEY } from '../audio';
 import { addCartoonSky, createStripedBar } from '../ui/gloss';
+import { winterCardImage } from '../seasons/winter';
+import { springCardImage } from '../seasons/spring';
 
 /**
  * PreloadScene — загрузка ассетов с индикатором прогресса.
@@ -59,6 +62,10 @@ export class PreloadScene extends Phaser.Scene {
         this.load.image(asset.key, assetUrl(asset.path));
       }
     }
+    // Карточка осени на экране выбора. Сам сезон ещё закрыт.
+    this.load.image(autumnCardImage.key, assetUrl(autumnCardImage.path));
+    this.load.image(winterCardImage.key, assetUrl(winterCardImage.path));
+    this.load.image(springCardImage.key, assetUrl(springCardImage.path));
     // Открытки и краб. Пока файлов нет — в консоли будет предупреждение,
     // а игра нарисует заглушку. Когда картинки появятся, подхватятся сами.
     for (const asset of [...STICKER_ASSETS, ...CRAB_ASSETS]) {
