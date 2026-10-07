@@ -1,5 +1,5 @@
 import Phaser from 'phaser';
-import { PALETTE, toCss } from '../palette';
+import { PALETTE, SKY_GRADIENT, toCss } from '../palette';
 import { getMainFont, withStroke } from '../theme';
 import { getLanguage } from '../i18n';
 
@@ -132,6 +132,20 @@ export function glossyPlate(
   return image;
 }
 
+/** Вертикальное небо приложения: #239acf → #4fc3f7 → #e1f5fe. */
+export function paintSkyGradient(
+  ctx: CanvasRenderingContext2D,
+  width: number,
+  height: number,
+): void {
+  const sky = ctx.createLinearGradient(0, 0, 0, height);
+  sky.addColorStop(0, toCss(SKY_GRADIENT.top));
+  sky.addColorStop(0.5, toCss(SKY_GRADIENT.mid));
+  sky.addColorStop(1, toCss(SKY_GRADIENT.bottom));
+  ctx.fillStyle = sky;
+  ctx.fillRect(0, 0, width, height);
+}
+
 /** Небо с мягкими облаками — фон меню и экранов выбора. */
 export function addCartoonSky(scene: Phaser.Scene): Phaser.GameObjects.Image {
   const width = Math.max(2, Math.round(scene.scale.width));
@@ -142,12 +156,7 @@ export function addCartoonSky(scene: Phaser.Scene): Phaser.GameObjects.Image {
     const tex = scene.textures.createCanvas(key, width, height);
     const ctx = tex?.getContext();
     if (tex && ctx) {
-      const sky = ctx.createLinearGradient(0, 0, 0, height);
-      sky.addColorStop(0, '#8ad4ff');
-      sky.addColorStop(0.55, '#4aa3f5');
-      sky.addColorStop(1, '#2f78d8');
-      ctx.fillStyle = sky;
-      ctx.fillRect(0, 0, width, height);
+      paintSkyGradient(ctx, width, height);
 
       ctx.fillStyle = 'rgba(255,255,255,0.38)';
       const clouds: Array<[number, number, number, number]> = [

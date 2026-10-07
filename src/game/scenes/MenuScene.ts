@@ -1,26 +1,17 @@
 import Phaser from 'phaser';
-import { COLORS, getMainFont } from '../theme';
+import { COLORS } from '../theme';
 import { createButton } from '../ui/Button';
-import {
-  addCartoonSky,
-  createRibbon,
-  createStars,
-  fitRibbonLabel,
-} from '../ui/gloss';
+import { addMainBackground, openingCloudEntrance } from '../ui/mainBackground';
+import { SkyScene } from './SkyScene';
 import { getSafeBounds } from '../safeArea';
 import { t, onLanguageChange, getLanguage } from '../i18n';
 import { playBackgroundMusic, syncBackgroundMusic } from '../audio';
-import { Progress } from '../progress';
-import { ACTIVE_SEASON, getSeason } from '../seasons';
-
-const RIBBON_FONT = 66;
 
 /**
  * MenuScene — главное меню.
- * Лента со звёздами, полоска прогресса и вертикальный ряд глянцевых пилюль.
+ * Слои неба, логотип языка и вертикальный ряд глянцевых пилюль.
  */
 export class MenuScene extends Phaser.Scene {
-  private titleText!: Phaser.GameObjects.Text;
   private playButton?: Phaser.GameObjects.Container;
   private settingsButton?: Phaser.GameObjects.Container;
   private unsubscribe?: () => void;
@@ -31,25 +22,13 @@ export class MenuScene extends Phaser.Scene {
 
   create(): void {
     const bounds = getSafeBounds(this.scale, 32);
-    addCartoonSky(this);
-
-    createStars(this, bounds.centerX, bounds.y + 48, 3, 3, 72).setDepth(2);
-
-    const ribbon = createRibbon(
-      this,
-      bounds.centerX,
-      bounds.y + 156,
-      t('menu.title'),
-      RIBBON_FONT,
-    );
-    ribbon.container.setDepth(2);
-    this.titleText = ribbon.label;
-
-    const season = getSeason(ACTIVE_SEASON);
-    let earned = 0;
-    for (let level = 1; level <= season.levelCount; level++) {
-      earned += Progress.getStars(level, ACTIVE_SEASON);
-    }
+    const firstOpen = openingCloudEntrance();
+    (this.scene.get('SkyScene') as SkyScene).presentForMenu(firstOpen);
+    const background = addMainBackground(this, {
+      logo: true,
+      cloudsFromEdges: firstOpen,
+      skipSky: true,
+    });
 
     this.buildButtons(bounds);
 
@@ -59,19 +38,14 @@ export class MenuScene extends Phaser.Scene {
     });
 
     this.unsubscribe = onLanguageChange(() => {
-      this.titleText.setFontFamily(getMainFont(getLanguage()));
-      fitRibbonLabel(
-        this.titleText,
-        t('menu.title'),
-        RIBBON_FONT,
-        Math.min(820, bounds.width * 0.7) - 100,
-      );
+      background.setLanguage(getLanguage());
       this.playButton?.destroy();
       this.settingsButton?.destroy();
       this.buildButtons(bounds);
     });
 
     this.events.once(Phaser.Scenes.Events.SHUTDOWN, () => {
+      (this.scene.get('SkyScene') as SkyScene).hideMenuStars();
       this.unsubscribe?.();
     });
   }

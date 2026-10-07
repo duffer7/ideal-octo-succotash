@@ -4,7 +4,6 @@ import { UI, UI_CSS, PALETTE } from '../palette';
 import { buildGrid, fontForCell, type GridCell } from '../layout';
 import { createButton } from '../ui/Button';
 import {
-  addCartoonSky,
   createLockIcon,
   createRibbon,
   createStars,
@@ -29,7 +28,6 @@ export class LevelSelectScene extends Phaser.Scene {
     const { width } = this.scale;
     const season = getSeason(ACTIVE_SEASON);
     const LEVEL_COUNT = season.levelCount;
-    addCartoonSky(this);
 
     createRibbon(this, width / 2, 58, t(season.nameKey), 42).container.setDepth(2);
 

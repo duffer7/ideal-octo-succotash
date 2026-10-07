@@ -4,7 +4,6 @@ import { UI_CSS, WORLD_COLORS } from '../palette';
 import { getSafeBounds } from '../safeArea';
 import { createButton } from '../ui/Button';
 import {
-  addCartoonSky,
   createLockIcon,
   createRibbon,
   glossyPlate,
@@ -42,7 +41,6 @@ export class SeasonSelectScene extends Phaser.Scene {
 
   create(): void {
     const bounds = getSafeBounds(this.scale, 28);
-    addCartoonSky(this);
 
     createRibbon(
       this,

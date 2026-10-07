@@ -6,7 +6,11 @@ import { STICKER_ASSETS } from '../stickers';
 import { CRAB_ASSETS } from '../characters/Helper';
 import { assetUrl } from '../assets';
 import { MUSIC_KEY, MUSIC_TRACKS, SFX_CLICK_KEY } from '../audio';
-import { addCartoonSky, createStripedBar } from '../ui/gloss';
+import { createStripedBar } from '../ui/gloss';
+import {
+  MAIN_GRADIENT,
+  queueMainBackground,
+} from '../ui/mainBackground';
 import { winterCardImage } from '../seasons/winter';
 import { springCardImage } from '../seasons/spring';
 
@@ -32,21 +36,29 @@ export class PreloadScene extends Phaser.Scene {
       );
     });
 
-    addCartoonSky(this);
+    // Сначала только картинка градиента: полоска загрузки рисуется на ней.
+    this.load.image(MAIN_GRADIENT.key, assetUrl(MAIN_GRADIENT.path));
+  }
+
+  create(): void {
+    this.scene.launch('SkyScene');
     const bar = createStripedBar(
       this,
       this.scale.width / 2,
-      this.scale.height / 2,
+      this.scale.height * 0.56,
       this.scale.width * 0.46,
       40,
       0,
     );
-    this.load.on('progress', (value: number) => bar.setValue(value));
-    this.loadAssets();
+    bar.setDepth(20);
 
-    this.load.on('complete', () => {
+    this.load.on('progress', (value: number) => bar.setValue(value));
+    this.load.once(Phaser.Loader.Events.COMPLETE, () => {
       this.scene.start('MenuScene');
     });
+    queueMainBackground(this.load);
+    this.loadAssets();
+    this.load.start();
   }
 
   /**

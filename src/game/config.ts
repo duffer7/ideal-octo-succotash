@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { BootScene } from './scenes/BootScene';
+import { SkyScene } from './scenes/SkyScene';
 import { PreloadScene } from './scenes/PreloadScene';
 import { MenuScene } from './scenes/MenuScene';
 import { SeasonSelectScene } from './scenes/SeasonSelectScene';
@@ -8,7 +9,6 @@ import { GameScene } from './scenes/GameScene';
 import { SettingsScene } from './scenes/SettingsScene';
 import { CreditsScene } from './scenes/CreditsScene';
 import { AlbumScene } from './scenes/AlbumScene';
-import { UI_CSS } from './palette';
 
 /** Логический размер игрового поля (базовый, 16:9 / горизонтальная ориентация).
  *  При Scale.EXPAND эти размеры — минимальные: мир расширяется под экран,
@@ -19,7 +19,9 @@ export const GAME_HEIGHT = 720;
 export const gameConfig: Phaser.Types.Core.GameConfig = {
   type: Phaser.AUTO,
   parent: 'game',
-  backgroundColor: UI_CSS.background,
+  // Холст прозрачный: до первой отрисовки и в зазорах видно небо страницы.
+  transparent: true,
+  backgroundColor: 'rgba(0,0,0,0)',
   width: GAME_WIDTH,
   height: GAME_HEIGHT,
   scale: {
@@ -40,6 +42,7 @@ export const gameConfig: Phaser.Types.Core.GameConfig = {
   },
   scene: [
     BootScene,
+    SkyScene,
     PreloadScene,
     MenuScene,
     SeasonSelectScene,

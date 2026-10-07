@@ -3,7 +3,7 @@ import { COLORS, getMainFont, withStroke } from '../theme';
 import { PALETTE, toCss, UI_CSS } from '../palette';
 import { getSafeBounds } from '../safeArea';
 import { createButton } from '../ui/Button';
-import { addCartoonSky, createRibbon, glossyPlate } from '../ui/gloss';
+import { createRibbon, glossyPlate } from '../ui/gloss';
 import { getLanguage, t } from '../i18n';
 
 const RIBBON_FONT = 40;
@@ -18,7 +18,6 @@ export class CreditsScene extends Phaser.Scene {
 
   create(): void {
     const bounds = getSafeBounds(this.scale, 28);
-    addCartoonSky(this);
 
     const panelW = Math.min(720, bounds.width * 0.62);
     const panelH = Math.min(460, bounds.height * 0.72);

@@ -3,7 +3,7 @@ import { COLORS, getMainFont, withStroke } from '../theme';
 import { UI_CSS, PALETTE } from '../palette';
 import { buildGrid, type GridCell } from '../layout';
 import { createButton } from '../ui/Button';
-import { addCartoonSky, createRibbon } from '../ui/gloss';
+import { createRibbon } from '../ui/gloss';
 import { t, getLanguage } from '../i18n';
 import { Progress } from '../progress';
 import { ACTIVE_SEASON } from '../seasons';
@@ -26,7 +26,6 @@ export class AlbumScene extends Phaser.Scene {
   create(): void {
     const { width } = this.scale;
     const unlocked = SUMMER_STICKERS.filter((s) => isStickerUnlocked(s.level)).length;
-    addCartoonSky(this);
 
     createRibbon(this, width / 2, 52, t('album.title'), 40).container.setDepth(2);
 

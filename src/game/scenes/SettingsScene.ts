@@ -4,7 +4,6 @@ import { PALETTE, toCss } from '../palette';
 import { getSafeBounds } from '../safeArea';
 import { createButton } from '../ui/Button';
 import {
-  addCartoonSky,
   createGear,
   createRibbon,
   createStripedBar,
@@ -63,7 +62,6 @@ export class SettingsScene extends Phaser.Scene {
 
   create(): void {
     const bounds = getSafeBounds(this.scale, 28);
-    addCartoonSky(this);
 
     const panelW = Math.min(820, bounds.width * 0.72);
     const panelH = Math.min(640, bounds.height * 0.92);

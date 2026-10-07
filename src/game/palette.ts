@@ -61,6 +61,21 @@ export const PALETTE = {
 // 2. Семантические токены интерфейса (числа для Phaser-графики).
 // -----------------------------------------------------------------------------
 
+/**
+ * Базовое небо приложения, сверху вниз.
+ * #239acf → #4fc3f7 → #e1f5fe
+ */
+export const SKY_GRADIENT = {
+  top: 0x239acf,
+  mid: 0x4fc3f7,
+  bottom: 0xe1f5fe,
+} as const;
+
+/** CSS-градиент того же неба: страница, загрузка, оверлеи. */
+export function skyGradientCss(): string {
+  return `linear-gradient(to bottom, ${toCss(SKY_GRADIENT.top)}, ${toCss(SKY_GRADIENT.mid)}, ${toCss(SKY_GRADIENT.bottom)})`;
+}
+
 /** Семантические цвета UI как числа Phaser. */
 export const UI = {
   /** Фон главной/акцентной поверхности. */
@@ -78,8 +93,8 @@ export const UI = {
   banner: PALETTE.yellow,
   /** Светлая панель настроек. */
   panel: PALETTE.panel,
-  /** Фон игровой сцены за пределами контента. */
-  background: PALETTE.blue,
+  /** Плоская заглушка фона (середина небесного градиента). */
+  background: SKY_GRADIENT.mid,
 
   /** Текст/иконки поверх цветных поверхностей. */
   onSurface: PALETTE.white,
@@ -103,7 +118,7 @@ export const UI_CSS = {
   onSurface: toCss(PALETTE.white),
   onSurfaceMuted: toCss(PALETTE.offWhite),
   reward: toCss(PALETTE.gold),
-  background: toCss(PALETTE.blue),
+  background: skyGradientCss(),
 } as const;
 
 // -----------------------------------------------------------------------------
