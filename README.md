@@ -1,5 +1,6 @@
 
-# Kids Educational Game
+# Kids Educational Game - Sky Bounty: Catch The Treasure
+
 
 Детская обучающая игра для Android и iOS.
 Стек: **TypeScript + Phaser 3 + Capacitor + Vite**.
