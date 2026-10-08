@@ -6,6 +6,7 @@ import { createButton } from '../ui/Button';
 import { createRibbon } from '../ui/gloss';
 import { t, getLanguage } from '../i18n';
 import { Progress } from '../progress';
+import type { BonusStarRank } from '../scoring';
 import { ACTIVE_SEASON } from '../seasons';
 import {
   SUMMER_STICKERS,
@@ -16,7 +17,7 @@ import { playClickSound } from '../audio';
 
 /**
  * Альбом открыток. Карточка открывается, когда уровень пройден хотя бы раз.
- * Супер-звезда отмечает открытку золотой рамкой.
+ * Цветная звезда отмечает открытку рамкой своего ранга.
  */
 export class AlbumScene extends Phaser.Scene {
   constructor() {
@@ -64,8 +65,8 @@ export class AlbumScene extends Phaser.Scene {
       const cell = cells[i];
       if (!cell) return;
       const open = isStickerUnlocked(sticker.level);
-      const superStar = Progress.getSuper(sticker.level, ACTIVE_SEASON);
-      this.createCard(cell, sticker.level, open, superStar);
+      const bonus = Progress.getBonus(sticker.level, ACTIVE_SEASON);
+      this.createCard(cell, sticker.level, open, bonus);
     });
   }
 
@@ -73,7 +74,7 @@ export class AlbumScene extends Phaser.Scene {
     cell: GridCell,
     level: number,
     open: boolean,
-    superStar: boolean,
+    bonus: BonusStarRank | null,
   ): void {
     const sticker = SUMMER_STICKERS[level - 1];
     if (!sticker) return;
@@ -83,9 +84,11 @@ export class AlbumScene extends Phaser.Scene {
 
     const children: Phaser.GameObjects.GameObject[] = [icon];
 
-    if (superStar && open) {
+    if (bonus && open) {
       const ring = this.add.graphics();
-      ring.lineStyle(Math.max(4, size * 0.035), PALETTE.super, 1);
+      const ringColor =
+        bonus === 'epic' ? PALETTE.violet : bonus === 'rare' ? PALETTE.blue : PALETTE.green;
+      ring.lineStyle(Math.max(4, size * 0.035), ringColor, 1);
       ring.strokeRoundedRect(
         -size * 0.36,
         -size * 0.44,

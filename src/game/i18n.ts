@@ -73,7 +73,9 @@ type Dictionary = {
   'game.missesShort': string;
   'game.combo': string;
   'game.frozen': string;
-  'game.superStar': string;
+  'game.bonus.basic': string;
+  'game.bonus.rare': string;
+  'game.bonus.epic': string;
   'game.dailyTitle': string;
   'game.dailyWin': string;
   'game.dailyAlmost': string;
@@ -84,6 +86,11 @@ type Dictionary = {
   'guide.goal': string;
   'guide.dailyGoal': string;
   'guide.stars': string;
+  'guide.bonus': string;
+  'guide.bonus.basic': string;
+  'guide.bonus.rare': string;
+  'guide.bonus.epic': string;
+  'guide.bonus.until': string;
   'guide.skip': string;
   'guide.any': string;
   'guide.tip.match': string;
@@ -163,7 +170,9 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'game.missesShort': '✕ {n}',
     'game.combo': 'Комбо ×{n}!',
     'game.frozen': 'Заморозка!',
-    'game.superStar': 'Супер-звезда!',
+    'game.bonus.basic': 'Обычно!',
+    'game.bonus.rare': 'Отлично!',
+    'game.bonus.epic': 'Превосходно!',
     'game.dailyTitle': 'Сегодня',
     'game.dailyWin': 'Чисто!',
     'game.dailyAlmost': 'Почти! Нужно без ошибок',
@@ -174,6 +183,11 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'guide.goal': 'Нужно {n} очков',
     'guide.dailyGoal': '{n} без ошибок',
     'guide.stars': 'Меньше ошибок — больше звёзд',
+    'guide.bonus': 'Цветная звезда: 3 звезды и уложись во время',
+    'guide.bonus.basic': 'Обычно',
+    'guide.bonus.rare': 'Отлично',
+    'guide.bonus.epic': 'Превосходно',
+    'guide.bonus.until': 'до {time}',
     'guide.skip': 'мимо',
     'guide.any': 'любая',
     'guide.tip.match': 'Клади в корзину с такой же картинкой. Коснись — подскажу.',
@@ -231,8 +245,8 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'levelSelect.title': 'Choose a level',
     'levelSelect.season': 'Summer',
     'levelSelect.album': 'Album',
-    'levelSelect.daily': 'Today: {n} with no mistakes',
-    'levelSelect.dailyDone': 'Today is done!',
+    'levelSelect.daily': 'Dauly Challenge: {n} with no mistakes',
+    'levelSelect.dailyDone': 'Daily Challenge is done!',
     'levelSelect.soon': 'Soon',
 
     'season.summer.name': 'Summer',
@@ -251,7 +265,9 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'game.missesShort': '✕ {n}',
     'game.combo': 'Combo ×{n}!',
     'game.frozen': 'Freeze!',
-    'game.superStar': 'Super star!',
+    'game.bonus.basic': 'Usually!',
+    'game.bonus.rare': 'Great!',
+    'game.bonus.epic': 'Superb!',
     'game.dailyTitle': 'Today',
     'game.dailyWin': 'Perfect!',
     'game.dailyAlmost': 'Almost! No mistakes needed',
@@ -262,6 +278,11 @@ const DICTIONARIES: Record<Language, Dictionary> = {
     'guide.goal': 'Score {n} points',
     'guide.dailyGoal': '{n} with no mistakes',
     'guide.stars': 'Fewer mistakes, more stars',
+    'guide.bonus': 'Color star: 3 stars and beat the time',
+    'guide.bonus.basic': 'Usually',
+    'guide.bonus.rare': 'Great',
+    'guide.bonus.epic': 'Superb',
+    'guide.bonus.until': 'by {time}',
     'guide.skip': 'skip',
     'guide.any': 'any',
     'guide.tip.match': 'Drop it on the matching picture. Tap it for a hint.',

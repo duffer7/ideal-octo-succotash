@@ -9,6 +9,7 @@ import {
   glossyPlate,
 } from '../ui/gloss';
 import { t, getLanguage, type TranslationKey } from '../i18n';
+import { Progress } from '../progress';
 import { ACTIVE_SEASON, SEASON_ORDER, type SeasonId } from '../seasons';
 import { autumnCardImage } from '../seasons/autumn';
 import { summerCardImage } from '../seasons/summer';
@@ -163,9 +164,20 @@ export class SeasonSelectScene extends Phaser.Scene {
 
       const children: Phaser.GameObjects.GameObject[] = [plate, label];
       if (!open) {
-        const lock = createLockIcon(this, cardW * 0.22);
+        const lock = createLockIcon(this, cardW * 0.6);
         lock.setPosition(0, -cardH * 0.12);
         children.push(lock);
+      } else {
+        const percent = this.add
+          .text(0, cardH / 2 + 10, `${Progress.completion(id)}%`, {
+            fontFamily: getMainFont(getLanguage()),
+            fontSize: '32px',
+            color: UI_CSS.onSurface,
+            fontStyle: 'bold',
+          })
+          .setOrigin(0.5, 0);
+        withStroke(percent, undefined, 5);
+        children.push(percent);
       }
 
       const card = this.add.container(x, y, children);

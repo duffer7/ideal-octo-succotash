@@ -91,6 +91,18 @@ export class PreloadScene extends Phaser.Scene {
       'star-score-inactive',
       assetUrl('assets/images/ui/star-score-inactive-v1.png'),
     );
+    this.load.image(
+      'star-score-basic',
+      assetUrl('assets/images/ui/star-score-v1-basic.png'),
+    );
+    this.load.image(
+      'star-score-rare',
+      assetUrl('assets/images/ui/star-score-v1-rare.png'),
+    );
+    this.load.image(
+      'star-score-epic',
+      assetUrl('assets/images/ui/star-score-v1-epic.png'),
+    );
     // this.load.image('button', 'assets/images/ui/button.png');
 
     // Иллюстрации уровней -> assets/images/levels/

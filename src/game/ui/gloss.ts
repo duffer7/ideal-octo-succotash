@@ -1,5 +1,6 @@
 import Phaser from 'phaser';
 import { PALETTE, SKY_GRADIENT, toCss } from '../palette';
+import type { BonusStarRank } from '../scoring';
 import { getMainFont, withStroke } from '../theme';
 import { getLanguage } from '../i18n';
 
@@ -348,6 +349,22 @@ export function fitRibbonLabel(
 
 const STAR_SCORE = 'star-score';
 const STAR_SCORE_EMPTY = 'star-score-inactive';
+const BONUS_STAR: Record<BonusStarRank, string> = {
+  basic: 'star-score-basic',
+  rare: 'star-score-rare',
+  epic: 'star-score-epic',
+};
+
+/** Цветная звезда за скорость: зелёная, синяя или фиолетовая. */
+export function createBonusStar(
+  scene: Phaser.Scene,
+  rank: BonusStarRank,
+  size: number,
+): Phaser.GameObjects.Image {
+  const star = scene.add.image(0, 0, BONUS_STAR[rank]);
+  star.setDisplaySize(size, size * (star.height / star.width));
+  return star;
+}
 
 /** Одна звезда счёта: золотая, если заработана, иначе пустая. */
 export function createScoreStar(
@@ -382,22 +399,16 @@ export function createStars(
   return scene.add.container(x, y, stars);
 }
 
-/** Жёлтый замок для закрытых уровней. */
+const LOCK = 'lock';
+
+/** Замок для закрытых уровней, сезонов и открыток. */
 export function createLockIcon(
   scene: Phaser.Scene,
   size: number,
-): Phaser.GameObjects.Graphics {
-  const g = scene.add.graphics();
-  const gold = PALETTE.gold;
-  g.lineStyle(Math.max(4, size * 0.12), gold, 1);
-  g.beginPath();
-  g.arc(0, -size * 0.08, size * 0.26, Math.PI, 0, false);
-  g.strokePath();
-  g.fillStyle(gold, 1);
-  g.fillRoundedRect(-size * 0.34, -size * 0.02, size * 0.68, size * 0.5, size * 0.12);
-  g.fillStyle(PALETTE.deepPurple, 1);
-  g.fillCircle(0, size * 0.16, size * 0.07);
-  return g;
+): Phaser.GameObjects.Image {
+  const lock = scene.add.image(0, 0, LOCK);
+  lock.setDisplaySize(size, size);
+  return lock;
 }
 
 /** Шестерёнка в шапке экрана настроек. */

@@ -2,6 +2,7 @@ import Phaser from 'phaser';
 import { COLORS, getMainFont, withStroke } from '../theme';
 import { UI, UI_CSS, PALETTE, toCss } from '../palette';
 import {
+  createBonusStar,
   createRibbon,
   createScoreStar,
   createStripedBar,
@@ -24,7 +25,16 @@ import {
   type LevelConfig,
 } from '../seasons';
 import { summerItems } from '../seasons/summer';
-import { collectPoints, mistakeCost, starsFromScore } from '../scoring';
+import {
+  bonusLimits,
+  bonusRankForSeconds,
+  collectPoints,
+  formatClock,
+  mistakeCost,
+  starsFromScore,
+  type BonusLimits,
+  type BonusStarRank,
+} from '../scoring';
 
 interface GameSceneData {
   level?: number;
@@ -63,6 +73,15 @@ export class GameScene extends Phaser.Scene {
   private scoreText!: Phaser.GameObjects.Text;
   /** Счётчик неправильных попаданий (промахов) в HUD. */
   private missesText!: Phaser.GameObjects.Text;
+  /** Время прохождения на экране. */
+  private timerText?: Phaser.GameObjects.Text;
+  /** Звезда рядом с таймером: какой ранг ещё доступен. */
+  private timerStar?: Phaser.GameObjects.Image;
+  /** Накопленное время игры, без паузы на диалог выхода. */
+  private elapsedMs = 0;
+  private timerMark = 0;
+  private shownTimerSecond = -1;
+  private shownTimerRank: BonusStarRank | 'off' | null = null;
   /** Полоска прогресса до цели уровня. */
   private progressBar?: StripedBar;
 
@@ -87,8 +106,6 @@ export class GameScene extends Phaser.Scene {
   private mode: 'level' | 'daily' = 'level';
   /** Верные ответы подряд. Сбрасывается ошибкой. */
   private combo = 0;
-  /** Момент старта уровня — для супер-звезды за быстрый проход. */
-  private startedAt = 0;
   /** Множитель скорости падения: 1 обычно, меньше — во время комбо или заморозки. */
   private fallTimeScale = 1;
   private slowTimer?: Phaser.Time.TimerEvent;
@@ -140,7 +157,10 @@ export class GameScene extends Phaser.Scene {
     this.playPaused = false;
     this.briefingObjects = [];
     this.exitObjects = [];
-    this.startedAt = 0;
+    this.elapsedMs = 0;
+    this.timerMark = 0;
+    this.shownTimerSecond = -1;
+    this.shownTimerRank = null;
     this.slowTimer = undefined;
     this.slowVeil = undefined;
     this.items = [];
@@ -288,6 +308,73 @@ export class GameScene extends Phaser.Scene {
       .setOrigin(0.5)
       .setDepth(21);
     withStroke(this.missesText, undefined, 4);
+    this.createTimer();
+  }
+
+  /** Часы слева. На обычном уровне рядом — звезда, которую ещё можно успеть. */
+  private createTimer(): void {
+    const x = this.bounds.x + 248;
+    const y = this.bounds.y + 36;
+    const daily = this.mode === 'daily';
+    const chip = glossyPlate(this, daily ? 150 : 200, 58, PALETTE.deepPurple, 'pill');
+    chip.setPosition(x, y).setDepth(20);
+
+    if (!daily) {
+      this.timerStar = createBonusStar(this, 'epic', 40)
+        .setPosition(x - 64, y)
+        .setDepth(21);
+    }
+
+    this.timerText = withStroke(
+      this.add
+        .text(daily ? x : x + 24, y - 1, '0:00', {
+          fontFamily: getMainFont(getLanguage()),
+          fontSize: '28px',
+          color: UI_CSS.onSurface,
+          fontStyle: 'bold',
+        })
+        .setOrigin(0.5)
+        .setDepth(21),
+      undefined,
+      4,
+    );
+  }
+
+  update(): void {
+    const now = this.time.now;
+    if (this.timerMark > 0 && this.playing && !this.playPaused && !this.finished) {
+      this.elapsedMs += now - this.timerMark;
+      this.refreshTimer();
+    }
+    this.timerMark = now;
+  }
+
+  private refreshTimer(): void {
+    const seconds = Math.floor(this.elapsedMs / 1000);
+    const rank =
+      this.mode === 'daily'
+        ? null
+        : bonusRankForSeconds(seconds, this.levelBonusLimits());
+    const rankKey = rank ?? 'off';
+    if (seconds === this.shownTimerSecond && rankKey === this.shownTimerRank) return;
+    this.shownTimerSecond = seconds;
+    this.shownTimerRank = rankKey;
+    this.timerText?.setText(formatClock(seconds));
+    if (!this.timerStar) return;
+    const key = rank
+      ? rank === 'epic'
+        ? 'star-score-epic'
+        : rank === 'rare'
+          ? 'star-score-rare'
+          : 'star-score-basic'
+      : 'star-score-inactive';
+    this.timerStar.setTexture(key);
+    this.timerStar.setDisplaySize(40, 40);
+    this.timerStar.setAlpha(rank ? 1 : 0.85);
+  }
+
+  private levelBonusLimits(): BonusLimits {
+    return bonusLimits(this.config.targetCount, this.config.spawnIntervalMs);
   }
 
   /** Текст счётчика неправильных попаданий. */
@@ -581,28 +668,31 @@ export class GameScene extends Phaser.Scene {
       ),
     );
 
+    let headerBottom = starsY + 28;
+    if (this.mode !== 'daily') {
+      headerBottom = this.addBonusGoals(
+        centerX,
+        starsY + 40,
+        panelW,
+        depth + 2,
+        tracked,
+      );
+    }
+
     const items = this.levelItems();
     const cols =
       items.length <= 5 ? Math.max(items.length, 1) : Math.ceil(items.length / 2);
     const rows = Math.ceil(items.length / cols);
     const buttonH = 84;
     const buttonY = centerY + panelH / 2 - buttonH / 2 - 16;
-    const headerBottom = starsY + 28;
-    const noteReserve = 96;
-    const available = Math.max(
-      rows * 100,
-      buttonY - buttonH / 2 - 20 - headerBottom - noteReserve,
-    );
     const cellW = Math.min(240, (panelW - 56) / cols);
+    const noteReserve = 70;
+    const gridTop = headerBottom + 8;
+    const gridBottom = buttonY - buttonH / 2 - 12 - noteReserve;
+    const rowH = Math.max(64, (gridBottom - gridTop) / rows);
     const iconSize = Math.round(
-      Math.min(
-        cellW * 0.86,
-        rows > 1 ? 128 : 210,
-        Math.max(88, available / rows - 52),
-      ),
+      Math.min(cellW * 0.86, rows > 1 ? 120 : 200, Math.max(52, rowH - 40)),
     );
-    const rowH = iconSize + 56;
-    const gridTop = headerBottom + 12;
     const gridLeft = centerX - (cols * cellW) / 2;
 
     items.forEach((def, index) => {
@@ -616,7 +706,7 @@ export class GameScene extends Phaser.Scene {
     const noteSize = 28;
     const note = this.overlayText(
       centerX,
-      gridTop + (rows - 1) * rowH + iconSize + 78,
+      gridBottom + 8,
       this.guideNote(),
       noteSize,
       UI_CSS.onSurface,
@@ -646,6 +736,64 @@ export class GameScene extends Phaser.Scene {
     // Кнопка «назад» остаётся поверх гида.
     this.backButton?.setDepth(48);
     this.fadeIn(tracked);
+  }
+
+  /**
+   * Три порога цветной звезды. Возвращает нижнюю границу блока,
+   * чтобы сетка предметов начиналась ниже.
+   */
+  private addBonusGoals(
+    centerX: number,
+    y: number,
+    panelW: number,
+    depth: number,
+    tracked: Phaser.GameObjects.GameObject[],
+  ): number {
+    tracked.push(
+      this.overlayText(
+        centerX,
+        y,
+        t('guide.bonus'),
+        22,
+        UI_CSS.onSurface,
+        depth,
+        panelW - 80,
+      ),
+    );
+
+    const limits = this.levelBonusLimits();
+    const ranks: BonusStarRank[] = ['epic', 'rare', 'basic'];
+    const label: Record<BonusStarRank, 'guide.bonus.epic' | 'guide.bonus.rare' | 'guide.bonus.basic'> = {
+      epic: 'guide.bonus.epic',
+      rare: 'guide.bonus.rare',
+      basic: 'guide.bonus.basic',
+    };
+    const colors: Record<BonusStarRank, string> = {
+      epic: toCss(PALETTE.violet),
+      rare: toCss(PALETTE.blue),
+      basic: toCss(PALETTE.green),
+    };
+    const rowY = y + 46;
+    const gap = Math.min(300, (panelW - 48) / 3);
+
+    ranks.forEach((rank, index) => {
+      const x = centerX + (index - 1) * gap;
+      const star = createBonusStar(this, rank, 36)
+        .setPosition(x, rowY)
+        .setDepth(depth);
+      const name = this.overlayText(x, rowY + 26, t(label[rank]), 20, colors[rank], depth);
+      const time = this.overlayText(
+        x,
+        rowY + 48,
+        t('guide.bonus.until', { time: formatClock(limits[rank]) }),
+        20,
+        UI_CSS.onSurface,
+        depth,
+      );
+      tracked.push(star, name, time);
+    });
+
+    return rowY + 66;
   }
 
   /** Подсказка гида: базовое правило и то, что особенного на этом уровне. */
@@ -751,7 +899,10 @@ export class GameScene extends Phaser.Scene {
     this.destroyTracked(this.briefingObjects);
     this.backButton?.setDepth(20);
     this.playing = true;
-    this.startedAt = this.time.now;
+    this.elapsedMs = 0;
+    this.timerMark = this.time.now;
+    this.shownTimerSecond = -1;
+    this.refreshTimer();
 
     this.spawnTimer = this.time.addEvent({
       delay: this.config.spawnIntervalMs,
@@ -1582,7 +1733,7 @@ export class GameScene extends Phaser.Scene {
       if (clean) Daily.markDone();
       this.showVictoryPanel({
         stars: clean ? 3 : 1,
-        superStar: false,
+        bonus: null,
         firstClear: false,
         dailyClean: clean,
       });
@@ -1591,22 +1742,14 @@ export class GameScene extends Phaser.Scene {
 
     // Звёзды — по доле сохранённых очков, а не по числу ошибок.
     const stars = starsFromScore(this.gained, this.lost);
-    // Супер-звезда — три звезды и быстрый проход.
-    const elapsed = this.time.now - this.startedAt;
-    const superStar = stars === 3 && elapsed <= this.parTimeMs();
+    // Цветная звезда — только вместе с тремя обычными, ранг зависит от времени.
+    const seconds = Math.floor(this.elapsedMs / 1000);
+    const bonus =
+      stars === 3 ? bonusRankForSeconds(seconds, this.levelBonusLimits()) : null;
     const firstClear = Progress.getStars(this.level, ACTIVE_SEASON) === 0;
-    Progress.setResult(this.level, stars, ACTIVE_SEASON, superStar);
+    Progress.setResult(this.level, stars, ACTIVE_SEASON, bonus);
 
-    this.showVictoryPanel({ stars, superStar, firstClear, dailyClean: null });
-  }
-
-  /**
-   * «Быстро»: около 2.8 с на предмет, но не короче, чем два интервала спавна.
-   * Плюс небольшой запас на последний предмет.
-   */
-  private parTimeMs(): number {
-    const perItem = Math.max(2800, this.config.spawnIntervalMs * 2.2);
-    return this.config.targetCount * perItem + 2500;
+    this.showVictoryPanel({ stars, bonus, firstClear, dailyClean: null });
   }
 
   /**
@@ -1615,7 +1758,7 @@ export class GameScene extends Phaser.Scene {
    */
   private showVictoryPanel(result: {
     stars: number;
-    superStar: boolean;
+    bonus: BonusStarRank | null;
     firstClear: boolean;
     /** null — обычный уровень. true/false — итог ежедневного задания. */
     dailyClean: boolean | null;
@@ -1698,8 +1841,14 @@ export class GameScene extends Phaser.Scene {
       gap,
       depth + 2,
     );
-    if (result.superStar) {
-      this.spawnSuperStar(centerX, starsY - starSize * 0.95, starSize * 0.85, depth + 3);
+    if (result.bonus) {
+      this.spawnSuperStar(
+        centerX,
+        starsY - starSize * 1.08,
+        starSize,
+        depth + 3,
+        result.bonus,
+      );
     }
     if (result.dailyClean === null) {
       const scoreLine = withStroke(
@@ -1783,23 +1932,36 @@ export class GameScene extends Phaser.Scene {
     });
   }
 
-  /** Четвёртая звезда за быстрый проход почти без ошибок. */
+  /** Цветная звезда над рядом за быстрый проход с тремя обычными. */
   private spawnSuperStar(
     x: number,
     y: number,
     size: number,
     depth: number,
+    rank: BonusStarRank,
   ): void {
+    const color =
+      rank === 'epic'
+        ? PALETTE.violet
+        : rank === 'rare'
+          ? PALETTE.blue
+          : PALETTE.green;
+    const captionKey =
+      rank === 'epic'
+        ? 'game.bonus.epic'
+        : rank === 'rare'
+          ? 'game.bonus.rare'
+          : 'game.bonus.basic';
     const star = this.add
-      .container(x, y, [createScoreStar(this, true, size)])
+      .container(x, y, [createBonusStar(this, rank, size)])
       .setDepth(depth)
       .setScale(0);
     const caption = withStroke(
       this.add
-        .text(x, y + size * 0.7, t('game.superStar'), {
+        .text(x, y + size * 0.7, t(captionKey), {
           fontFamily: getMainFont(getLanguage()),
           fontSize: '22px',
-          color: toCss(PALETTE.super),
+          color: toCss(color),
           fontStyle: 'bold',
         })
         .setOrigin(0.5)

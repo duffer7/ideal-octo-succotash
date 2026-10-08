@@ -7,6 +7,7 @@ import type { TranslationKey } from './i18n';
 import { PALETTE, UI } from './palette';
 import { Progress } from './progress';
 import { ACTIVE_SEASON } from './seasons';
+import { createLockIcon } from './ui/gloss';
 
 export type StickerGlyph =
   | 'shell'
@@ -78,6 +79,8 @@ export function createStickerIcon(
     const img = scene.add.image(0, 0, sticker.imageKey);
     img.setDisplaySize(size * 0.78, size * 0.78);
     children.push(img);
+  } else if (locked && scene.textures.exists('lock')) {
+    children.push(createLockIcon(scene, size * 0.62));
   } else {
     children.push(drawGlyph(scene, sticker, size * 0.62, locked));
   }

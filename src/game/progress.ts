@@ -4,6 +4,12 @@
  *
  * Прогресс привязан к сезону: у каждого сезона своя разблокировка и звёзды.
  */
+import {
+  bestBonusRank,
+  coerceBonusRank,
+  seasonCompletionPercent,
+  type BonusStarRank,
+} from './scoring';
 import { ACTIVE_SEASON, getSeason, type SeasonId } from './seasons';
 
 const STORAGE_KEY = 'kidsgame.progress.v2';
@@ -15,10 +21,10 @@ interface SeasonProgress {
   /** Звёзды за каждый уровень (индекс = уровень - 1). */
   stars: number[];
   /**
-   * Супер-звезда: уровень пройден быстро и почти без ошибок.
-   * Индекс = уровень - 1. Старые сохранения поля не имеют.
+   * Цветная звезда за скорость: basic / rare / epic.
+   * Индекс = уровень - 1. Старые сохранения хранят `true` или не имеют поля.
    */
-  superStars?: boolean[];
+  superStars?: (BonusStarRank | boolean)[];
 }
 
 /** Прогресс всех сезонов. */
@@ -68,30 +74,48 @@ export const Progress = {
     return sp.stars[level - 1] ?? 0;
   },
 
-  /** Есть ли супер-звезда за быстрый чистый проход. */
-  getSuper(level: number, seasonId: SeasonId = ACTIVE_SEASON): boolean {
+  /**
+   * Процент прохождения сезона.
+   * 100% — все уровни на 3 звезды и с эпической суперзвездой.
+   */
+  completion(seasonId: SeasonId = ACTIVE_SEASON): number {
     const data = load();
     const sp = getSeasonProgress(data, seasonId);
-    return sp.superStars?.[level - 1] ?? false;
+    const count = getSeason(seasonId).levelCount;
+    const bonuses = Array.from({ length: count }, (_, i) =>
+      coerceBonusRank(sp.superStars?.[i]),
+    );
+    return seasonCompletionPercent(count, sp.stars, bonuses);
+  },
+
+  /** Лучшая цветная звезда за уровень, если она уже заработана. */
+  getBonus(level: number, seasonId: SeasonId = ACTIVE_SEASON): BonusStarRank | null {
+    const data = load();
+    const sp = getSeasonProgress(data, seasonId);
+    return coerceBonusRank(sp.superStars?.[level - 1]);
   },
 
   /**
    * Отмечает уровень пройденным, сохраняет звёзды (0..3) и открывает следующий.
    * Не открывает уровень выше количества уровней в сезоне.
-   * `superStar` поднимает флаг и больше не снимается.
+   * Цветная звезда только повышается и больше не снимается.
    */
   setResult(
     level: number,
     stars: number,
     seasonId: SeasonId = ACTIVE_SEASON,
-    superStar = false,
+    bonus: BonusStarRank | null = null,
   ): void {
     const data = load();
     const sp = getSeasonProgress(data, seasonId);
     sp.stars[level - 1] = Math.max(sp.stars[level - 1] ?? 0, stars);
-    if (superStar) {
+    const nextBonus = bestBonusRank(
+      coerceBonusRank(sp.superStars?.[level - 1]),
+      bonus,
+    );
+    if (nextBonus) {
       if (!sp.superStars) sp.superStars = [];
-      sp.superStars[level - 1] = true;
+      sp.superStars[level - 1] = nextBonus;
     }
 
     const maxLevel = getSeason(seasonId).levelCount;

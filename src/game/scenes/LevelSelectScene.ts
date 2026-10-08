@@ -3,7 +3,9 @@ import { COLORS, getMainFont, withStroke } from '../theme';
 import { UI, UI_CSS, PALETTE } from '../palette';
 import { buildGrid, fontForCell, type GridCell } from '../layout';
 import { createButton } from '../ui/Button';
+import type { BonusStarRank } from '../scoring';
 import {
+  createBonusStar,
   createLockIcon,
   createRibbon,
   createStars,
@@ -89,9 +91,9 @@ export class LevelSelectScene extends Phaser.Scene {
       const level = i + 1;
       const isUnlocked = level <= unlocked;
       const stars = Progress.getStars(level, ACTIVE_SEASON);
-      const superStar = Progress.getSuper(level, ACTIVE_SEASON);
+      const bonus = Progress.getBonus(level, ACTIVE_SEASON);
       const color = seasonColors[(level - 1) % seasonColors.length];
-      this.createLevelCard(cell, level, isUnlocked, stars, superStar, color);
+      this.createLevelCard(cell, level, isUnlocked, stars, bonus, color);
     });
   }
 
@@ -115,7 +117,7 @@ export class LevelSelectScene extends Phaser.Scene {
     level: number,
     unlocked: boolean,
     stars: number,
-    superStar: boolean,
+    bonus: BonusStarRank | null,
     color: number,
   ): void {
     const size = Math.min(cell.width, cell.height);
@@ -126,7 +128,10 @@ export class LevelSelectScene extends Phaser.Scene {
       unlocked ? color : UI.disabled,
       'badge',
     );
-    if (!unlocked) bg.setAlpha(0.75);
+    if (!unlocked) {
+      bg.setTint(0xa4a4b0);
+      bg.setAlpha(0.62);
+    }
 
     const num = this.add
       .text(0, unlocked ? size * 0.08 : 0, unlocked ? String(level) : '', {
@@ -141,11 +146,13 @@ export class LevelSelectScene extends Phaser.Scene {
     const children: Phaser.GameObjects.GameObject[] = [bg, num];
 
     if (!unlocked) {
-      children.push(createLockIcon(this, size * 0.46));
+      children.push(createLockIcon(this, size * 0.64));
     } else {
       children.push(createStars(this, 0, -size * 0.28, 3, stars, size * 0.16));
-      if (superStar) {
-        children.push(createStars(this, size * 0.32, -size * 0.32, 1, 1, size * 0.18));
+      if (bonus) {
+        const extra = createBonusStar(this, bonus, size * 0.26);
+        extra.setPosition(size * 0.34, -size * 0.38);
+        children.push(extra);
       }
     }
 
